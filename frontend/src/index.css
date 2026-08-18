@@ -90,3 +90,47 @@ body {
 @media (prefers-reduced-motion: reduce) {
     .animate-fade-up, .animate-floaty { animation: none; }
 }
+
+/* ---- Seasonal / festival decorations (subtle, CSS-only) ---- */
+.cw-diya-spark {
+    position: absolute; bottom: -10px; border-radius: 9999px;
+    filter: blur(0.4px); opacity: 0;
+    animation: cwRise 7s ease-in infinite;
+}
+@keyframes cwRise {
+    0% { transform: translateY(0) scale(0.6); opacity: 0; }
+    15% { opacity: 0.9; }
+    100% { transform: translateY(-70vh) scale(1); opacity: 0; }
+}
+.cw-diya-flame {
+    width: 10px; height: 14px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    filter: blur(1px); opacity: 0.85;
+    animation: cwFlicker 1.6s ease-in-out infinite;
+}
+@keyframes cwFlicker {
+    0%, 100% { transform: scaleY(1); opacity: 0.85; }
+    50% { transform: scaleY(1.25); opacity: 1; }
+}
+.cw-snow {
+    position: absolute; top: -12px; width: 8px; height: 8px; border-radius: 9999px;
+    background: rgba(255,255,255,0.9); box-shadow: 0 0 6px rgba(255,255,255,0.6);
+    animation: cwFall linear infinite;
+}
+@keyframes cwFall {
+    0% { transform: translateY(-12px) translateX(0); opacity: 0; }
+    10% { opacity: 0.9; }
+    100% { transform: translateY(105vh) translateX(20px); opacity: 0.2; }
+}
+.cw-sparkle {
+    position: absolute; width: 10px; height: 10px; opacity: 0;
+    background: currentColor;
+    clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+    animation: cwTwinkle 3s ease-in-out infinite;
+}
+@keyframes cwTwinkle {
+    0%, 100% { transform: scale(0.4); opacity: 0; }
+    50% { transform: scale(1); opacity: 0.85; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .cw-diya-spark, .cw-diya-flame, .cw-snow, .cw-sparkle { animation: none; opacity: 0; }
+}

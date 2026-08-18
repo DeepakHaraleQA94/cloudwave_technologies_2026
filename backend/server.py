@@ -220,6 +220,32 @@ async def notify_admins_new_enquiry(enq: dict):
             logger.error(f"Enquiry notification email failed for {r}: {e}")
 
 
+async def send_student_confirmation(enq: dict):
+    if not EMAIL_KEY or not enq.get("email"):
+        return
+    subject = f"We received your enquiry — {EMAIL_FROM_NAME}"
+    course = enq.get("course_name") or "our courses"
+    html = (f'<table role="presentation" width="100%" style="font-family:Arial,sans-serif">'
+            f'<tr><td style="padding:24px">'
+            f'<h2 style="color:#1D4ED8;margin:0 0 6px">Thank you, {escape(str(enq.get("name") or "there"))}!</h2>'
+            f'<p style="color:#475569;margin:0 0 16px;line-height:1.6">We have received your enquiry about '
+            f'<strong>{escape(str(course))}</strong>. Our counsellors will reach out to you very shortly with '
+            f'course details, fees and upcoming batch schedules.</p>'
+            f'<div style="background:#f1f5f9;border-radius:8px;padding:14px 16px;margin:0 0 16px">'
+            f'<p style="margin:0;color:#0f172a">Your Enquiry ID: <strong style="color:#1D4ED8">{escape(str(enq.get("enquiry_id")))}</strong></p>'
+            f'<p style="margin:6px 0 0;color:#64748b;font-size:13px">Please quote this ID in any follow-up conversation.</p>'
+            f'</div>'
+            f'<p style="color:#475569;margin:0 0 4px;line-height:1.6">If you need immediate help, just reply to this email '
+            f'or contact us on WhatsApp.</p>'
+            f'<p style="font-size:12px;color:#94a3b8;margin-top:16px">Sent by {escape(EMAIL_FROM_NAME)}. '
+            f'This is a confirmation of your enquiry — we never ask for your password or payment details by email.</p>'
+            f'</td></tr></table>')
+    try:
+        await send_email(to=enq["email"], subject=subject, html=html)
+    except Exception as e:
+        logger.error(f"Student confirmation email failed for {enq.get('email')}: {e}")
+
+
 # ------------------------------------------------------------------ generic CRUD factory
 # resource -> (collection, published_field)
 RESOURCES = {
@@ -440,6 +466,7 @@ async def create_enquiry(body: EnquiryIn):
     doc["updated_at"] = now_iso()
     await db.enquiries.insert_one(dict(doc))
     asyncio.create_task(notify_admins_new_enquiry(dict(doc)))
+    asyncio.create_task(send_student_confirmation(dict(doc)))
     return {"ok": True, "enquiry_id": doc["enquiry_id"], "message": "Enquiry submitted successfully"}
 
 @api.get("/admin/enquiries")

@@ -4,11 +4,13 @@ import Navbar from "./Navbar";
 import Footer from "./Footer";
 import WhatsAppButton from "./WhatsAppButton";
 import ThemeBanner from "./ThemeBanner";
+import ThemeDecorations from "./ThemeDecorations";
 
 export default function SiteLayout() {
   return (
     <div className="flex min-h-screen flex-col">
       <ThemeBanner />
+      <ThemeDecorations />
       <Navbar />
       <main className="flex-1"><Outlet /></main>
       <Footer />
