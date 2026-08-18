@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { NavLink, Outlet, useNavigate, Navigate } from "react-router-dom";
-import { LayoutDashboard, BookOpen, CalendarDays, Users, Inbox, Star, FileText, HelpCircle, Image as ImageIcon, Video, CalendarHeart, Award, Palette, Settings as SettingsIcon, LogOut, Menu, X, Cloud, Mail, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, BookOpen, CalendarDays, Users, Inbox, Star, FileText, HelpCircle, Image as ImageIcon, Video, CalendarHeart, Award, Palette, Settings as SettingsIcon, LogOut, Menu, X, Cloud, Mail, ShieldCheck, BadgeCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { Loader } from "@/components/site/SiteLayout";
@@ -19,6 +19,7 @@ const NAV = [
   { to: "/admin/r/videos", label: "Videos", Icon: Video },
   { to: "/admin/r/events", label: "Events", Icon: CalendarHeart },
   { to: "/admin/r/placements", label: "Placement Stories", Icon: Award },
+  { to: "/admin/r/certificates", label: "Certificates", Icon: BadgeCheck },
   { section: "System" },
   { to: "/admin/messages", label: "Contact Messages", Icon: Mail },
   { to: "/admin/r/themes", label: "Theme Management", Icon: Palette },

@@ -178,8 +178,7 @@ export const RESOURCES = {
     ],
     defaults: { placement_year: String(new Date().getFullYear()), published: true },
   },
-  themes: {
-    title: "Themes", singular: "Theme", titleField: "name", publishField: "is_active",
+  themes: {    title: "Themes", singular: "Theme", titleField: "name", publishField: "is_active",
     columns: [["name", "Name"], ["type", "Type"], ["priority", "Priority"], ["start_date", "Start"], ["end_date", "End"], ["is_active", "Active"]],
     fields: [
       { name: "name", label: "Theme Name", type: "text" },
@@ -199,6 +198,19 @@ export const RESOURCES = {
       { name: "is_active", label: "Active", type: "switch" },
     ],
     defaults: { type: "festival", priority: 5, primary_color: "#1D4ED8", secondary_color: "#4F46E5", accent_color: "#F97316", is_active: false, animation_enabled: false },
+  },
+  certificates: {
+    title: "Certificates", singular: "Certificate", titleField: "student_name",
+    columns: [["certificate_id", "Certificate ID"], ["student_name", "Student"], ["course", "Course"], ["issue_date", "Issued"], ["grade", "Grade"], ["published", "Valid"]],
+    fields: [
+      { name: "certificate_id", label: "Certificate ID", type: "text", hint: "Unique ID printed on the certificate, e.g. CWT-2026-0001" },
+      { name: "student_name", label: "Student Name", type: "text" },
+      { name: "course", label: "Course Completed", type: "text" },
+      { name: "issue_date", label: "Issue Date", type: "date" },
+      { name: "grade", label: "Grade", type: "text" },
+      { name: "published", label: "Valid / Verifiable", type: "switch" },
+    ],
+    defaults: { published: true },
   },
 };
 

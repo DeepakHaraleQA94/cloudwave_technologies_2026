@@ -23,6 +23,7 @@ import Enquiry from "@/pages/public/Enquiry";
 import Gallery from "@/pages/public/Gallery";
 import Videos from "@/pages/public/Videos";
 import Events from "@/pages/public/Events";
+import VerifyCertificate from "@/pages/public/VerifyCertificate";
 import { Privacy, Terms } from "@/pages/public/Legal";
 
 import Login from "@/pages/admin/Login";
@@ -63,6 +64,7 @@ function App() {
                   <Route path="/gallery" element={<Gallery />} />
                   <Route path="/videos" element={<Videos />} />
                   <Route path="/events" element={<Events />} />
+                  <Route path="/verify" element={<VerifyCertificate />} />
                   <Route path="/contact" element={<Contact />} />
                   <Route path="/enquiry" element={<Enquiry />} />
                   <Route path="/privacy" element={<Privacy />} />

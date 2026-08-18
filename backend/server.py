@@ -299,6 +299,7 @@ RESOURCES = {
     "events": ("events", "published"),
     "placements": ("placements", "published"),
     "themes": ("themes", None),
+    "certificates": ("certificates", "published"),
 }
 
 def clean(doc):
@@ -450,6 +451,15 @@ async def public_placements(course: Optional[str] = None, company: Optional[str]
     if company: extra["company_name"] = company
     if year: extra["placement_year"] = year
     return await pub_list("placements", "published", extra)
+
+@api.get("/certificates/verify")
+async def verify_certificate(cid: str):
+    c = await db.certificates.find_one(
+        {"certificate_id": {"$regex": f"^{re.escape(cid.strip())}$", "$options": "i"}, "published": True},
+        {"_id": 0})
+    if not c:
+        raise HTTPException(404, "No valid certificate found for this ID")
+    return c
 
 @api.get("/theme/active")
 async def active_theme():
@@ -869,6 +879,18 @@ async def seed_content():
                 "image_url": "", "category": gallery_cats[i], "event_name": gallery_cats[i],
                 "year": "2026", "event_date": "2026-01-15", "location": "Pune",
                 "featured": i < 3, "published": True, "sort_order": i,
+                "created_at": now_iso(), "updated_at": now_iso()})
+
+    if await db.certificates.count_documents({}) == 0:
+        certs = [
+            ("CWT-2026-0001", "Rahul Sharma", "Selenium with Java", "2026-03-15", "A+"),
+            ("CWT-2026-0002", "Anjali Gupta", "AWS Solutions Architect", "2026-04-10", "A"),
+            ("CWT-2026-0003", "Karan Mehta", "Data Analytics", "2026-02-28", "A+"),
+        ]
+        for i, (cid, nm, crs, dt, grade) in enumerate(certs):
+            await db.certificates.insert_one({
+                "id": new_id(), "certificate_id": cid, "student_name": nm, "course": crs,
+                "issue_date": dt, "grade": grade, "published": True, "sort_order": i,
                 "created_at": now_iso(), "updated_at": now_iso()})
 
     if await db.themes.count_documents({}) == 0:
