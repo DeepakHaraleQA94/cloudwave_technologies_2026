@@ -76,7 +76,6 @@ export const RESOURCES = {
       { name: "name", label: "Student Name", type: "text" },
       { name: "course", label: "Course", type: "text" },
       { name: "rating", label: "Rating (1-5)", type: "number" },
-      { name: "photo_url", label: "Photo", type: "image" },
       { name: "text", label: "Testimonial", type: "textarea", rows: 4, full: true },
       { name: "published", label: "Published", type: "switch" },
     ],

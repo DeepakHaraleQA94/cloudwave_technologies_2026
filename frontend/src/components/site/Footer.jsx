@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Cloud, Mail, Phone, MapPin, Clock, Facebook, Instagram, Linkedin, Youtube, Twitter, MessageCircle } from "lucide-react";
 import { useSite } from "@/context/SiteContext";
+import { mediaUrl } from "@/lib/api";
 
 export default function Footer() {
   const { settings } = useSite();
@@ -15,10 +16,16 @@ export default function Footer() {
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-2 lg:grid-cols-4 lg:px-8">
         <div>
           <div className="flex items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground">
-              <Cloud className="h-5 w-5" />
-            </span>
-            <span className="font-heading text-lg font-bold text-white">{settings.institute_name || "CloudWave"}<span className="text-brand-accent">.</span></span>
+            {settings.logo_url ? (
+              <img src={mediaUrl(settings.logo_url)} alt={settings.institute_name || "CloudWave Technologies"} className="h-9 w-auto object-contain bg-white/90 rounded-md p-1" />
+            ) : (
+              <>
+                <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground">
+                  <Cloud className="h-5 w-5" />
+                </span>
+                <span className="font-heading text-lg font-bold text-white">{settings.institute_name || "CloudWave"}<span className="text-brand-accent">.</span></span>
+              </>
+            )}
           </div>
           <p className="mt-4 text-sm leading-relaxed text-slate-400">{settings.footer_text || settings.tagline}</p>
           <div className="mt-4 flex gap-2">

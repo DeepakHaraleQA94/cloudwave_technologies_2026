@@ -12,8 +12,11 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional, Any, Dict
 from datetime import datetime, timezone, timedelta
-import logging, uuid, re, io, csv, base64, secrets
-import bcrypt, jwt
+import logging, uuid, re, io, csv, base64, secrets, asyncio, ipaddress
+import bcrypt, jwt, httpx
+from html import escape
+from html.parser import HTMLParser
+from urllib.parse import urlparse
 
 # ------------------------------------------------------------------ DB
 mongo_url = os.environ['MONGO_URL']
@@ -150,6 +153,71 @@ async def get_media(mid: str):
     return Response(content=base64.b64decode(rec["data"]),
                     media_type=rec["content_type"],
                     headers={"Cache-Control": "public, max-age=31536000"})
+
+
+# ------------------------------------------------------------------ EMAIL (Emergent-managed Resend)
+EMAIL_BASE_URL = "https://integrations.emergentagent.com"
+EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "CloudWave Technologies")
+
+class _EmailScan(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tags, self.urls = set(), []
+    def handle_starttag(self, tag, attrs):
+        self.tags.add(tag.lower())
+        self.urls += [v for k, v in attrs if k.lower() in ("href", "src") and v]
+
+def _assert_safe_email(subject: str, html: str) -> None:
+    scan = _EmailScan(); scan.feed(html)
+    if scan.tags & {"form", "input", "textarea", "select"}:
+        raise ValueError("No forms or input fields in email")
+    for url in scan.urls:
+        low = url.strip().lower()
+        if low.startswith(("mailto:", "tel:", "cid:", "#")):
+            continue
+        if not low.startswith("https://"):
+            raise ValueError("Email links/assets must be absolute https")
+
+async def send_email(*, to: str, subject: str, html: str):
+    _assert_safe_email(subject, html)
+    payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
+    async with httpx.AsyncClient(timeout=30) as c:
+        resp = await c.post(f"{EMAIL_BASE_URL}/api/v1/email/send",
+                            headers={"X-Email-Key": EMAIL_KEY}, json=payload)
+    resp.raise_for_status()
+    return resp.json().get("id")
+
+async def notify_admins_new_enquiry(enq: dict):
+    if not EMAIL_KEY:
+        return
+    recips = [e.strip() for e in os.environ.get("NOTIFY_EMAILS", "").split(",") if e.strip()]
+    if not recips:
+        admins = await db.users.find({"role": "admin"}, {"_id": 0, "email": 1}).to_list(50)
+        recips = [a["email"] for a in admins]
+    subject = f"New Enquiry: {enq.get('name')} — {enq.get('course_name') or 'General'}"
+    rows = [("Enquiry ID", enq.get("enquiry_id")), ("Name", enq.get("name")),
+            ("Email", enq.get("email")), ("Mobile", enq.get("mobile")),
+            ("WhatsApp", enq.get("whatsapp")), ("Course", enq.get("course_name")),
+            ("Batch", enq.get("batch_name")), ("Preferred Mode", enq.get("mode")),
+            ("City", enq.get("city")), ("Source", enq.get("source")),
+            ("Message", enq.get("message"))]
+    tr = "".join(f'<tr><td style="padding:6px 12px;color:#64748b;font-weight:600">{escape(str(k))}</td>'
+                 f'<td style="padding:6px 12px;color:#0f172a">{escape(str(v or "-"))}</td></tr>' for k, v in rows)
+    html = (f'<table role="presentation" width="100%" style="font-family:Arial,sans-serif">'
+            f'<tr><td style="padding:20px">'
+            f'<h2 style="color:#1D4ED8;margin:0 0 4px">New Student Enquiry</h2>'
+            f'<p style="color:#475569;margin:0 0 16px">A new enquiry was submitted on the CloudWave Technologies website.</p>'
+            f'<table role="presentation" width="100%" style="border:1px solid #e2e8f0;border-radius:8px;border-collapse:separate">{tr}</table>'
+            f'<p style="font-size:12px;color:#94a3b8;margin-top:16px">Sent by {escape(EMAIL_FROM_NAME)}. '
+            f'Sign in to your admin dashboard to view and manage this enquiry. '
+            f'We never ask for your password or payment details by email.</p>'
+            f'</td></tr></table>')
+    for r in recips:
+        try:
+            await send_email(to=r, subject=subject, html=html)
+        except Exception as e:
+            logger.error(f"Enquiry notification email failed for {r}: {e}")
 
 
 # ------------------------------------------------------------------ generic CRUD factory
@@ -371,6 +439,7 @@ async def create_enquiry(body: EnquiryIn):
     doc["created_at"] = now_iso()
     doc["updated_at"] = now_iso()
     await db.enquiries.insert_one(dict(doc))
+    asyncio.create_task(notify_admins_new_enquiry(dict(doc)))
     return {"ok": True, "enquiry_id": doc["enquiry_id"], "message": "Enquiry submitted successfully"}
 
 @api.get("/admin/enquiries")

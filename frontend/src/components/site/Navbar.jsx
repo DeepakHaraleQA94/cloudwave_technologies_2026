@@ -19,15 +19,18 @@ const LINKS = [
 
 export function Logo({ light }) {
   const { settings } = useSite();
+  if (settings.logo_url) {
+    return (
+      <Link to="/" className="flex items-center" data-testid="site-logo">
+        <img src={mediaUrl(settings.logo_url)} alt={settings.institute_name || "CloudWave Technologies"} className="h-9 w-auto object-contain" />
+      </Link>
+    );
+  }
   return (
     <Link to="/" className="flex items-center gap-2.5 group" data-testid="site-logo">
-      {settings.logo_url ? (
-        <img src={mediaUrl(settings.logo_url)} alt={settings.institute_name} className="h-9 w-9 rounded-lg object-cover" />
-      ) : (
-        <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-          <Cloud className="h-5 w-5" />
-        </span>
-      )}
+      <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+        <Cloud className="h-5 w-5" />
+      </span>
       <span className={`font-heading text-lg font-bold tracking-tight ${light ? "text-white" : "text-foreground"}`}>
         {settings.institute_name || "CloudWave"}
         <span className="text-brand-accent">.</span>

@@ -14,8 +14,16 @@ export function SiteProvider({ children }) {
   const [settings, setSettings] = useState({});
   const [theme, setTheme] = useState(null);
   const [loaded, setLoaded] = useState(false);
+  const [preview, setPreview] = useState(false);
 
   useEffect(() => {
+    const isPreview = new URLSearchParams(window.location.search).get("preview") === "theme";
+    if (isPreview) {
+      setPreview(true);
+      try { const raw = sessionStorage.getItem("cw_preview_theme"); if (raw) setTheme(JSON.parse(raw)); } catch (e) {}
+      api.get("/settings").then((s) => setSettings(s.data || {})).catch(() => {}).finally(() => setLoaded(true));
+      return;
+    }
     Promise.all([api.get("/settings"), api.get("/theme/active")])
       .then(([s, t]) => { setSettings(s.data || {}); setTheme(t.data?.theme || null); })
       .catch(() => {})
@@ -42,7 +50,7 @@ export function SiteProvider({ children }) {
   }, [settings, theme]);
 
   return (
-    <SiteCtx.Provider value={{ settings, theme, setTheme, loaded, refresh: () => api.get("/settings").then(r => setSettings(r.data)) }}>
+    <SiteCtx.Provider value={{ settings, theme, setTheme, preview, loaded, refresh: () => api.get("/settings").then(r => setSettings(r.data)) }}>
       {children}
     </SiteCtx.Provider>
   );

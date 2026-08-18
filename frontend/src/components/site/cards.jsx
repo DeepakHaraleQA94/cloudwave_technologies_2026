@@ -72,7 +72,7 @@ export function TestimonialCard({ t }) {
       <div className="flex gap-0.5">{Array.from({ length: 5 }).map((_, i) => <Star key={i} className={`h-4 w-4 ${i < (t.rating || 5) ? "fill-brand-accent text-brand-accent" : "text-muted"}`} />)}</div>
       <p className="mt-4 flex-1 text-sm leading-relaxed text-foreground/90">“{t.text}”</p>
       <div className="mt-5 flex items-center gap-3">
-        <img src={mediaUrl(t.photo_url) || FALLBACK.student} alt={t.name} loading="lazy" className="h-11 w-11 rounded-full object-cover" />
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/10 font-heading text-base font-bold text-primary">{(t.name || "?").charAt(0).toUpperCase()}</span>
         <div>
           <p className="font-heading text-sm font-semibold">{t.name}</p>
           <p className="text-xs text-muted-foreground">{t.course}</p>
