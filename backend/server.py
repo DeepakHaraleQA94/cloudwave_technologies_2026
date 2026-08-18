@@ -461,6 +461,79 @@ async def verify_certificate(cid: str):
         raise HTTPException(404, "No valid certificate found for this ID")
     return c
 
+@api.get("/certificates/{cid}/download")
+async def download_certificate(cid: str):
+    c = await db.certificates.find_one(
+        {"certificate_id": {"$regex": f"^{re.escape(cid.strip())}$", "$options": "i"}, "published": True},
+        {"_id": 0})
+    if not c:
+        raise HTTPException(404, "No valid certificate found for this ID")
+    from reportlab.lib.pagesizes import landscape, A4
+    from reportlab.pdfgen import canvas
+    from reportlab.lib import colors
+
+    settings = await db.website_settings.find_one({"id": "main"}, {"_id": 0}) or {}
+    inst = settings.get("institute_name", "CloudWave Technologies")
+    blue = colors.HexColor("#1D4ED8")
+    accent = colors.HexColor("#F97316")
+    dark = colors.HexColor("#0F172A")
+    muted = colors.HexColor("#64748B")
+
+    buf = io.BytesIO()
+    W, H = landscape(A4)
+    pdf = canvas.Canvas(buf, pagesize=landscape(A4))
+
+    pdf.setFillColor(colors.HexColor("#F8FAFC"))
+    pdf.rect(0, 0, W, H, fill=1, stroke=0)
+    pdf.setStrokeColor(blue); pdf.setLineWidth(6)
+    pdf.rect(24, 24, W - 48, H - 48, fill=0, stroke=1)
+    pdf.setStrokeColor(accent); pdf.setLineWidth(1.5)
+    pdf.rect(36, 36, W - 72, H - 72, fill=0, stroke=1)
+
+    cx = W / 2
+    pdf.setFillColor(blue)
+    pdf.setFont("Helvetica-Bold", 26)
+    pdf.drawCentredString(cx, H - 100, inst)
+    pdf.setFillColor(muted)
+    pdf.setFont("Helvetica", 11)
+    pdf.drawCentredString(cx, H - 120, (settings.get("tagline") or "IT Training Institute"))
+
+    pdf.setFillColor(dark)
+    pdf.setFont("Helvetica-Bold", 34)
+    pdf.drawCentredString(cx, H - 185, "Certificate of Completion")
+    pdf.setStrokeColor(accent); pdf.setLineWidth(2)
+    pdf.line(cx - 90, H - 198, cx + 90, H - 198)
+
+    pdf.setFillColor(muted); pdf.setFont("Helvetica", 14)
+    pdf.drawCentredString(cx, H - 235, "This is to certify that")
+    pdf.setFillColor(blue); pdf.setFont("Helvetica-Bold", 30)
+    pdf.drawCentredString(cx, H - 275, c.get("student_name", ""))
+    pdf.setFillColor(muted); pdf.setFont("Helvetica", 14)
+    pdf.drawCentredString(cx, H - 305, "has successfully completed the course")
+    pdf.setFillColor(dark); pdf.setFont("Helvetica-Bold", 20)
+    pdf.drawCentredString(cx, H - 335, c.get("course", ""))
+
+    details = []
+    if c.get("grade"): details.append(f"Grade: {c['grade']}")
+    if c.get("issue_date"): details.append(f"Issued: {c['issue_date']}")
+    if details:
+        pdf.setFillColor(muted); pdf.setFont("Helvetica", 12)
+        pdf.drawCentredString(cx, H - 365, "     |     ".join(details))
+
+    pdf.setFillColor(dark); pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(70, 70, f"Certificate ID: {c.get('certificate_id')}")
+    pdf.setFillColor(muted); pdf.setFont("Helvetica", 9)
+    pdf.drawString(70, 55, "Verify authenticity at the institute website /verify page.")
+    pdf.setStrokeColor(dark); pdf.setLineWidth(1)
+    pdf.line(W - 230, 78, W - 70, 78)
+    pdf.setFillColor(dark); pdf.setFont("Helvetica", 10)
+    pdf.drawCentredString(W - 150, 62, "Authorised Signatory")
+
+    pdf.showPage(); pdf.save()
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{c.get("certificate_id")}.pdf"'})
+
 @api.get("/theme/active")
 async def active_theme():
     settings = await db.website_settings.find_one({"id": "main"}, {"_id": 0}) or {}

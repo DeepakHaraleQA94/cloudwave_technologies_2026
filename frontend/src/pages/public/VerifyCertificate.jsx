@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { BadgeCheck, ShieldCheck, ShieldX, Search, Loader2, GraduationCap, Calendar, Award } from "lucide-react";
+import { BadgeCheck, ShieldCheck, ShieldX, Search, Loader2, GraduationCap, Calendar, Award, Download } from "lucide-react";
 import { Section } from "@/components/site/SiteLayout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { api } from "@/lib/api";
+import { api, API } from "@/lib/api";
 import { useSite } from "@/context/SiteContext";
 import SEO from "@/components/site/SEO";
 
@@ -70,6 +70,11 @@ export default function VerifyCertificate() {
               <Row Icon={Calendar} label="Issue Date" value={cert.issue_date} />
               {cert.grade && <Row Icon={Award} label="Grade" value={cert.grade} />}
               <p className="rounded-lg bg-secondary/60 p-3 text-xs text-muted-foreground">This certificate was issued by {settings.institute_name || "CloudWave Technologies"} and is authentic.</p>
+              <Button asChild className="w-full rounded-full" data-testid="download-certificate-btn">
+                <a href={`${API}/certificates/${encodeURIComponent(cert.certificate_id)}/download`}>
+                  <Download className="mr-1 h-4 w-4" /> Download Certificate (PDF)
+                </a>
+              </Button>
             </div>
           </div>
         )}
