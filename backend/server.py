@@ -246,6 +246,45 @@ async def send_student_confirmation(enq: dict):
         logger.error(f"Student confirmation email failed for {enq.get('email')}: {e}")
 
 
+# ------------------------------------------------------------------ WhatsApp (Twilio) alerts
+TWILIO_SID = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+TWILIO_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+TWILIO_WA_FROM = os.environ.get("TWILIO_WHATSAPP_FROM", "").strip()
+ADMIN_WA_NUMBERS = [n.strip() for n in os.environ.get("ADMIN_WHATSAPP_NUMBERS", "").split(",") if n.strip()]
+
+def is_high_intent(doc: dict) -> bool:
+    has_course = bool(doc.get("course_id") or doc.get("course_name"))
+    has_batch = bool(doc.get("batch_id"))
+    msg = doc.get("message") or ""
+    return bool(has_course and (has_batch or len(msg.strip()) >= 15))
+
+async def send_whatsapp(to: str, body: str):
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_SID}/Messages.json"
+    data = {"From": TWILIO_WA_FROM, "To": f"whatsapp:{to}", "Body": body}
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.post(url, data=data, auth=(TWILIO_SID, TWILIO_TOKEN))
+    r.raise_for_status()
+    return r.json().get("sid")
+
+async def notify_admins_whatsapp(enq: dict):
+    if not (TWILIO_SID and TWILIO_TOKEN and TWILIO_WA_FROM and ADMIN_WA_NUMBERS):
+        logger.info("WhatsApp alerts not configured (Twilio env vars missing) — skipping.")
+        return
+    body = ("*High-intent enquiry* \U0001F525\n"
+            f"ID: {enq.get('enquiry_id')}\n"
+            f"Name: {enq.get('name')}\n"
+            f"Mobile: {enq.get('mobile')}\n"
+            f"Course: {enq.get('course_name') or '-'}\n"
+            f"Batch: {enq.get('batch_name') or '-'}\n"
+            f"City: {enq.get('city') or '-'}\n"
+            "— CloudWave Technologies")
+    for n in ADMIN_WA_NUMBERS:
+        try:
+            await send_whatsapp(n, body)
+        except Exception as e:
+            logger.error(f"WhatsApp alert failed for {n}: {e}")
+
+
 # ------------------------------------------------------------------ generic CRUD factory
 # resource -> (collection, published_field)
 RESOURCES = {
@@ -464,9 +503,12 @@ async def create_enquiry(body: EnquiryIn):
     doc["notes"] = []
     doc["created_at"] = now_iso()
     doc["updated_at"] = now_iso()
+    doc["high_intent"] = is_high_intent(doc)
     await db.enquiries.insert_one(dict(doc))
     asyncio.create_task(notify_admins_new_enquiry(dict(doc)))
     asyncio.create_task(send_student_confirmation(dict(doc)))
+    if doc["high_intent"]:
+        asyncio.create_task(notify_admins_whatsapp(dict(doc)))
     return {"ok": True, "enquiry_id": doc["enquiry_id"], "message": "Enquiry submitted successfully"}
 
 @api.get("/admin/enquiries")

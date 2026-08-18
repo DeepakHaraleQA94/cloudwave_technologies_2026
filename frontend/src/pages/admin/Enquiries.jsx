@@ -85,7 +85,7 @@ export default function Enquiries() {
             : data.items.map((e) => (
               <TableRow key={e.id} data-testid={`enquiry-row-${e.id}`}>
                 <TableCell className="font-mono text-xs">{e.enquiry_id}</TableCell>
-                <TableCell className="font-medium">{e.name}</TableCell>
+                <TableCell className="font-medium">{e.name}{e.high_intent && <span className="ml-2 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700" data-testid={`high-intent-${e.id}`}>High Intent</span>}</TableCell>
                 <TableCell>{e.mobile}</TableCell>
                 <TableCell className="max-w-[140px]"><span className="line-clamp-1">{e.course_name || "—"}</span></TableCell>
                 <TableCell><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[e.status] || ""}`}>{e.status}</span></TableCell>
