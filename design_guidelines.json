@@ -1,0 +1,118 @@
+{
+  "project_name": "CloudWave Technologies",
+  "project_type": "hybrid_fullstack",
+  "theme_preference": "light_primary_dark_toggle",
+  "typography": {
+    "headings": {
+      "font_family": "Outfit, sans-serif",
+      "weights": ["300", "500", "700"],
+      "usage": "Use tight tracking (tracking-tight) for all headings. Never use Inter or Roboto."
+    },
+    "body": {
+      "font_family": "IBM Plex Sans, sans-serif",
+      "weights": ["400", "500"],
+      "usage": "Use relaxed line height (leading-relaxed) for readable course descriptions and blog posts."
+    },
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight",
+      "h3": "text-xl sm:text-2xl",
+      "h4": "text-lg sm:text-xl",
+      "body": "text-base",
+      "labels": "text-xs tracking-[0.2em] uppercase"
+    }
+  },
+  "colors": {
+    "brand": {
+      "primary": "#1D4ED8",
+      "secondary": "#4F46E5",
+      "accent": "#F97316"
+    },
+    "neutrals": {
+      "background_light": "#F8FAFC",
+      "surface_light": "#FFFFFF",
+      "text_main_light": "#0F172A",
+      "text_muted_light": "#475569",
+      "background_dark": "#020617",
+      "surface_dark": "#0F172A",
+      "text_main_dark": "#F8FAFC",
+      "text_muted_dark": "#94A3B8"
+    },
+    "seasonal_theme_system": {
+      "concept": "Professional color-shifting and subtle banner injections. Do not use cartoon vectors.",
+      "implementation": "Use CSS variables for --brand-accent. e.g., default uses Blue, Diwali shifts accent to Gold/Orange (#F59E0B), Christmas to Crimson (#E11D48). Inject a minimal top announcement banner. No falling snow or disruptive animations."
+    }
+  },
+  "visual_enhancers": {
+    "surfaces": {
+      "marketing_header": "Crystal Glassmorphism: backdrop-blur-xl bg-white/70 (light) or bg-slate-950/60 (dark), 1px bottom border-border/40. NEVER use complete transparent background.",
+      "dashboard_cards": "Flat Solid: bg-card, border border-border, shadow-sm. NO glassmorphism in admin.",
+      "marketing_cards": "Use subtle hover lift (-translate-y-1) with shadow-lg for Course and Trainer cards."
+    },
+    "textures": "Subtle grid background (bg-grid-slate-200/50) in Hero section to establish the IT/Tech vibe without overwhelming the content."
+  },
+  "grids_and_layouts": {
+    "marketing": {
+      "spacing": "Generous. Use py-24 or py-32 for section paddings.",
+      "pattern": "Bento Grid (Mode A) for 'Why Choose Us' and 'Course Features'. Asymmetrical, col-span-full to col-span-4 variations. gap-8."
+    },
+    "dashboard": {
+      "spacing": "Dense. p-4 or p-6.",
+      "pattern": "High-Density Grid (Mode B). grid-cols-1 md:grid-cols-4. gap-4 or gap-6. Sidebar navigation (w-64) with main content area."
+    }
+  },
+  "components_strategy": {
+    "marketing_ui": "Use raw HTML/Tailwind for expressive layouts. Overlapping images, absolute positioning for decorative elements.",
+    "dashboard_ui": "Use Shadcn UI strictly. Tables, Cards, Dialogs, Select, Forms.",
+    "charts": "Shadcn Charts (Recharts) for dashboard analytics (Enquiries, Revenue, Placements).",
+    "forms": "React Hook Form + Zod + Shadcn Form components for Enquiry/Registration."
+  },
+  "motion": {
+    "libraries": [
+      "framer-motion"
+    ],
+    "marketing": "Staggered fade-up entrances for Course grids. Subtle parallax on Hero image using Framer Motion. Micro-interactions on CTA buttons.",
+    "dashboard": "Minimal. Only instant feedback (hover states, toast popups). No layout entrance animations to maintain fast feel.",
+    "accessibility": "Respect prefers-reduced-motion media query."
+  },
+  "media": {
+    "icons": "lucide-react for standard UI. @phosphor-icons/react for marketing feature blocks.",
+    "images": [
+      {
+        "category": "Hero / Services",
+        "url": "https://images.pexels.com/photos/36598855/pexels-photo-36598855.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "alt": "Software developer coding"
+      },
+      {
+        "category": "About / Placement / Students",
+        "url": "https://images.unsplash.com/photo-1758270705290-62b6294dd044?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHw0fHxkaXZlcnNlJTIwc3R1ZGVudHMlMjB0ZWNoJTIwY2xhc3Nyb29tfGVufDB8fHx8MTc4NzA1NzAwOXww&ixlib=rb-4.1.0&q=85",
+        "alt": "Diverse tech students collaborating"
+      },
+      {
+        "category": "Infrastructure / Modern Office",
+        "url": "https://images.pexels.com/photos/8453814/pexels-photo-8453814.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "alt": "Modern tech office workspace"
+      },
+      {
+        "category": "Trainers / Team",
+        "url": "https://images.pexels.com/photos/67112/pexels-photo-67112.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "alt": "Professional IT workspace"
+      }
+    ],
+    "logo_strategy": "Use a combination of a Lucide Icon (e.g., 'Cloud' or 'Waves') + Typography ('CloudWave') in the Header. Do NOT use external placeholder image services."
+  },
+  "instructions_to_main_agent": [
+    "UNIVERSAL GUIDELINES FOR MAIN AGENT: Avoid 'AI slop' aesthetic (generic centered layouts, uniform styling).",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Do NOT apply universal transitions (e.g., transition: all). Target specific properties like opacity, transform.",
+    "Never center align the main App container. Use standard block flow.",
+    "Use pill-shaped or slightly rounded (rounded-md) modern buttons.",
+    "Never use emoji characters for icons. Use the specified icon libraries.",
+    "Every interaction needs micro-animations (hover states, focus rings).",
+    "Use 2-3x more spacing (Tailwind p-8 to p-24) in Marketing sections.",
+    "All interactive elements MUST have a data-testid attribute in kebab-case (e.g., data-testid='enquiry-submit-btn').",
+    "For the dynamic seasonal theme, create a Context or simple state that provides the current theme, and apply CSS variables to the root. DO NOT overcomplicate with heavy graphics.",
+    "Admin Dashboard must follow the Data-Ink Ratio: remove unnecessary borders, use skeleton loaders for data fetching.",
+    "Use sonner for all toast notifications."
+  ]
+}
