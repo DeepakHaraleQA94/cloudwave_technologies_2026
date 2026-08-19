@@ -10,10 +10,10 @@ import AdminLayout, { ProtectedRoute } from "@/pages/admin/AdminLayout";
 import Home from "@/pages/public/Home";
 import Courses from "@/pages/public/Courses";
 import CourseDetail from "@/pages/public/CourseDetail";
+import Services from "@/pages/public/Services";
 import About from "@/pages/public/About";
 import Trainers from "@/pages/public/Trainers";
 import Batches from "@/pages/public/Batches";
-import Placements from "@/pages/public/Placements";
 import Reviews from "@/pages/public/Reviews";
 import FAQ from "@/pages/public/FAQ";
 import Blog from "@/pages/public/Blog";
@@ -54,9 +54,9 @@ function App() {
                   <Route path="/about" element={<About />} />
                   <Route path="/courses" element={<Courses />} />
                   <Route path="/courses/:slug" element={<CourseDetail />} />
+                  <Route path="/services" element={<Services />} />
                   <Route path="/trainers" element={<Trainers />} />
                   <Route path="/batches" element={<Batches />} />
-                  <Route path="/placements" element={<Placements />} />
                   <Route path="/reviews" element={<Reviews />} />
                   <Route path="/faq" element={<FAQ />} />
                   <Route path="/blog" element={<Blog />} />

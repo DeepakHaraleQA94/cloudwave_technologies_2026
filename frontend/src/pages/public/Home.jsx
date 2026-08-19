@@ -5,7 +5,7 @@ import { ArrowRight, Phone, Rocket, ShieldCheck, GraduationCap, Briefcase, Users
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Section, SectionHeading } from "@/components/site/SiteLayout";
-import { CourseCard, TrainerCard, TestimonialCard, PlacementCard, BlogCard, BatchRow } from "@/components/site/cards";
+import { CourseCard, TrainerCard, TestimonialCard, BlogCard, BatchRow } from "@/components/site/cards";
 import { useGet } from "@/hooks/usePublic";
 import { useSite } from "@/context/SiteContext";
 import { mediaUrl } from "@/lib/api";
@@ -24,7 +24,6 @@ export default function Home() {
   const { data: testimonials } = useGet("/testimonials");
   const { data: faqs } = useGet("/faqs");
   const { data: blog } = useGet("/blog");
-  const { data: placements } = useGet("/placements");
   const { data: videos } = useGet("/videos");
 
   const featured = (courses?.length ? courses : allCourses)?.slice(0, 6) || [];
@@ -172,17 +171,6 @@ export default function Home() {
       )}
 
       {/* PLACEMENTS */}
-      {placements?.length > 0 && (
-        <Section className="py-20">
-          <div className="flex items-end justify-between gap-4">
-            <SectionHeading eyebrow="Success Stories" title="Our Students. Placed & Thriving." />
-            <Button asChild variant="outline" className="hidden rounded-full sm:flex"><Link to="/placements">View All <ArrowRight className="ml-1 h-4 w-4" /></Link></Button>
-          </div>
-          <div className="mt-10 grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-6">
-            {placements.slice(0, 6).map((p) => <PlacementCard key={p.id} p={p} />)}
-          </div>
-        </Section>
-      )}
 
       {/* TESTIMONIALS */}
       {testimonials?.length > 0 && (
