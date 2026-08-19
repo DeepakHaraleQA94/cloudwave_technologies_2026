@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import { SiteProvider } from "@/context/SiteContext";
 import SiteLayout, { Loader } from "@/components/site/SiteLayout";
+import Splash from "@/components/site/Splash";
 import AdminLayout, { ProtectedRoute } from "@/pages/admin/AdminLayout";
 
 import Home from "@/pages/public/Home";
@@ -43,6 +44,7 @@ function ScrollToTop() {
 function App() {
   return (
     <div className="App">
+      <Splash />
       <BrowserRouter>
         <AuthProvider>
           <SiteProvider>
