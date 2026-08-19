@@ -47,6 +47,14 @@ export function SiteProvider({ children }) {
       root.style.setProperty("--brand-accent", "24 95% 53%");
     }
     if (settings.institute_name) document.title = settings.institute_name + " — IT Training Institute";
+    if (settings.logo_url) {
+      let link = document.querySelector('link[rel="icon"]');
+      if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }
+      link.href = settings.logo_url;
+      let apple = document.querySelector('link[rel="apple-touch-icon"]');
+      if (!apple) { apple = document.createElement("link"); apple.rel = "apple-touch-icon"; document.head.appendChild(apple); }
+      apple.href = settings.logo_url;
+    }
   }, [settings, theme]);
 
   return (
