@@ -17,7 +17,7 @@ export default function Footer() {
         <div>
           <div className="flex items-center gap-2.5">
             {settings.logo_url ? (
-              <img src={mediaUrl(settings.logo_url)} alt={settings.institute_name || "CloudWave Technologies"} className="h-9 w-auto object-contain bg-white/90 rounded-md p-1" />
+              <img src={mediaUrl(settings.logo_url)} alt={settings.institute_name || "CloudWave Technologies"} className="h-12 w-auto object-contain rounded-md bg-white/95 p-1.5" />
             ) : (
               <>
                 <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground">

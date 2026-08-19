@@ -22,7 +22,7 @@ export function Logo({ light }) {
   if (settings.logo_url) {
     return (
       <Link to="/" className="flex items-center" data-testid="site-logo">
-        <img src={mediaUrl(settings.logo_url)} alt={settings.institute_name || "CloudWave Technologies"} className="h-9 w-auto object-contain" />
+        <img src={mediaUrl(settings.logo_url)} alt={settings.institute_name || "CloudWave Technologies"} className="h-11 w-auto object-contain sm:h-12" />
       </Link>
     );
   }
