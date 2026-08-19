@@ -87,6 +87,13 @@ body {
 ::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground)/0.35); border-radius: 8px; }
 ::selection { background: hsl(var(--primary)/0.2); }
 
+@keyframes cwSpin { to { transform: rotate(360deg); } }
+.cw-spin-slow { animation: cwSpin 40s linear infinite; }
+.cw-spin-rev { animation: cwSpin 60s linear infinite reverse; }
+@media (prefers-reduced-motion: reduce) {
+    .cw-spin-slow, .cw-spin-rev { animation: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .animate-fade-up, .animate-floaty { animation: none; }
 }

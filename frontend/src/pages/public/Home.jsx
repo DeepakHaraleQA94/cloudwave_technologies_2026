@@ -46,7 +46,19 @@ export default function Home() {
         <div className="absolute inset-0 bg-grid opacity-40" />
         <div className="absolute -left-40 top-0 h-96 w-96 rounded-full bg-primary/30 blur-[120px]" />
         <div className="absolute -right-20 bottom-0 h-96 w-96 rounded-full bg-brand-accent/20 blur-[120px]" />
-        <Section className="relative grid items-center gap-12 py-20 lg:grid-cols-2 lg:py-28">
+        {/* Rotating CloudWave brand emblem watermark */}
+        <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden" aria-hidden="true">
+          <div className="cw-spin-slow grid h-[520px] w-[520px] place-items-center rounded-full border border-dashed border-white/10">
+            <div className="cw-spin-rev grid h-[360px] w-[360px] place-items-center rounded-full border border-white/[0.06]">
+              {settings.logo_url ? (
+                <img src={mediaUrl(settings.logo_url)} alt="" className="h-40 w-40 rounded-full object-contain opacity-[0.07] invert" />
+              ) : (
+                <Cloud className="h-40 w-40 text-white/10" />
+              )}
+            </div>
+          </div>
+        </div>
+        <Section className="relative z-10 grid items-center gap-12 py-20 lg:grid-cols-2 lg:py-28">
           <motion.div initial="hidden" animate="show" variants={fade}>
             <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-medium text-slate-200">
               <Rocket className="h-3.5 w-3.5 text-brand-accent" /> {settings.tagline || "Launch Your IT Career"}
