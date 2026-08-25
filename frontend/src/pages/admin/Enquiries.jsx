@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api, API, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 const STATUSES = ["New", "Contacted", "Follow-up", "Interested", "Registered", "Converted", "Not Interested", "Closed"];
 const STATUS_COLOR = { New: "bg-blue-100 text-blue-700", Contacted: "bg-indigo-100 text-indigo-700", "Follow-up": "bg-amber-100 text-amber-700", Interested: "bg-cyan-100 text-cyan-700", Registered: "bg-violet-100 text-violet-700", Converted: "bg-green-100 text-green-700", "Not Interested": "bg-red-100 text-red-700", Closed: "bg-slate-100 text-slate-600" };
@@ -24,6 +25,8 @@ export default function Enquiries() {
   const [view, setView] = useState(null);
   const [note, setNote] = useState("");
   const [delId, setDelId] = useState(null);
+  const [converting, setConverting] = useState(false);
+  const nav = useNavigate();
   const pageSize = 15;
 
   const load = useCallback(() => {
@@ -57,6 +60,18 @@ export default function Enquiries() {
       const url = URL.createObjectURL(res.data);
       const a = document.createElement("a"); a.href = url; a.download = "enquiries.csv"; a.click(); URL.revokeObjectURL(url);
     } catch { toast.error("Export failed"); }
+  };
+
+  const convertToStudent = async () => {
+    setConverting(true);
+    try {
+      await api.post(`/admin/enquiries/${view.id}/convert`, {
+        course_id: view.course_id || "", batch_id: view.batch_id || "", training_mode: view.mode || "",
+      });
+      toast.success("Enquiry converted to student");
+      setView(null); load(); nav("/admin/students");
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    finally { setConverting(false); }
   };
 
   const totalPages = Math.max(1, Math.ceil(data.total / pageSize));
@@ -142,6 +157,9 @@ export default function Enquiries() {
                     <Button onClick={addNote} data-testid="add-note-btn">Add</Button>
                   </div>
                 </div>
+                <Button onClick={convertToStudent} disabled={converting} className="w-full" data-testid="convert-to-student-btn">
+                  {converting ? "Converting..." : "Convert to Student"}
+                </Button>
               </div>
             </>
           )}

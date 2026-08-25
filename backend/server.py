@@ -733,7 +733,201 @@ async def stats(admin=Depends(get_current_admin)):
         "by_course": sorted([{"name": k, "value": v} for k, v in by_course.items()], key=lambda x: -x["value"])[:6],
         "by_month": [{"name": k, "value": v} for k, v in sorted(by_month.items())][-6:],
         "recent": sorted(enq, key=lambda x: x.get("created_at", ""), reverse=True)[:5],
+        "total_students": await db.students.count_documents({}),
+        "active_students": await db.students.count_documents({"status": "Active"}),
+        "completed_students": await db.students.count_documents({"status": "Completed"}),
     }
+
+
+# ------------------------------------------------------------------ STUDENTS
+ACTIVE_ENROLL = ["Registered", "Active", "On Hold"]
+
+def gen_student_id(n): return f"CW-STU-{n:04d}"
+
+async def batch_seats(batch_id):
+    b = await db.batches.find_one({"id": batch_id}, {"_id": 0})
+    if not b:
+        return None
+    cap = int(b.get("seats") or 0)
+    occ = await db.student_enrollments.count_documents({"batch_id": batch_id, "status": {"$in": ACTIVE_ENROLL}})
+    return {"batch": b, "capacity": cap, "occupied": occ, "available": max(cap - occ, 0)}
+
+async def make_enrollment(student_id, course_id, batch_id, joining_date, status):
+    c = await db.courses.find_one({"id": course_id}, {"_id": 0}) or {}
+    b = await db.batches.find_one({"id": batch_id}, {"_id": 0}) or {}
+    doc = {"id": new_id(), "student_id": student_id, "course_id": course_id, "batch_id": batch_id,
+           "course_name": c.get("name", ""), "batch_label": f"{c.get('name', 'Batch')} — {b.get('start_date', '')}",
+           "enrollment_date": now_iso()[:10], "joining_date": joining_date or now_iso()[:10],
+           "status": status, "created_at": now_iso(), "updated_at": now_iso()}
+    await db.student_enrollments.insert_one(dict(doc))
+    return doc
+
+async def enrich_student(s):
+    if not s:
+        return s
+    s["batch"] = (await db.batches.find_one({"id": s.get("batch_id")}, {"_id": 0})) if s.get("batch_id") else {}
+    s["course_info"] = (await db.courses.find_one({"id": s.get("course_id")}, {"_id": 0})) if s.get("course_id") else {}
+    s["enrollments"] = await db.student_enrollments.find({"student_id": s["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return s
+
+@api.get("/admin/students")
+async def list_students(admin=Depends(get_current_admin), search: Optional[str] = None,
+                        status: Optional[str] = None, course_id: Optional[str] = None,
+                        batch_id: Optional[str] = None, mode: Optional[str] = None,
+                        page: int = 1, page_size: int = 20):
+    q = {}
+    if status and status != "All": q["status"] = status
+    if course_id and course_id != "All": q["course_id"] = course_id
+    if batch_id and batch_id != "All": q["batch_id"] = batch_id
+    if mode and mode != "All": q["training_mode"] = mode
+    if search:
+        rx = {"$regex": re.escape(search), "$options": "i"}
+        q["$or"] = [{"full_name": rx}, {"email": rx}, {"mobile": rx}, {"student_id": rx}]
+    total = await db.students.count_documents(q)
+    items = await db.students.find(q, {"_id": 0}).sort("created_at", -1) \
+        .skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    for s in items:
+        b = await db.batches.find_one({"id": s.get("batch_id")}, {"_id": 0}) if s.get("batch_id") else None
+        c = await db.courses.find_one({"id": s.get("course_id")}, {"_id": 0, "name": 1}) if s.get("course_id") else None
+        s["course_name"] = (c or {}).get("name", "")
+        s["batch_timing"] = f"{(b or {}).get('days', '')} {(b or {}).get('time', '')}".strip() if b else ""
+        s["batch_label"] = f"{(c or {}).get('name', '')} — {(b or {}).get('start_date', '')}" if b else ""
+        s["trainer"] = s.get("trainer") or (b or {}).get("trainer", "")
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+@api.get("/admin/students/{sid}")
+async def get_student(sid: str, admin=Depends(get_current_admin)):
+    s = await db.students.find_one({"id": sid}, {"_id": 0})
+    if not s:
+        raise HTTPException(404, "Student not found")
+    return await enrich_student(s)
+
+@api.post("/admin/students")
+async def create_student(body: Dict[str, Any], admin=Depends(get_current_admin)):
+    override = bool(body.pop("override_capacity", False))
+    course_id, batch_id = body.get("course_id"), body.get("batch_id")
+    if batch_id:
+        info = await batch_seats(batch_id)
+        if info and not override and info["available"] <= 0:
+            raise HTTPException(400, "Batch is full. Please select another batch.")
+    n = await db.students.count_documents({}) + 1
+    sid = new_id()
+    body["id"] = sid
+    body["student_id"] = body.get("student_id") or gen_student_id(n)
+    body.setdefault("status", "Registered")
+    body.setdefault("payment_status", "Pending")
+    body["created_at"] = now_iso(); body["updated_at"] = now_iso()
+    await db.students.insert_one(dict(body))
+    if course_id and batch_id:
+        await make_enrollment(sid, course_id, batch_id, body.get("joining_date", ""), body.get("status", "Registered"))
+    return await enrich_student(await db.students.find_one({"id": sid}, {"_id": 0}))
+
+@api.put("/admin/students/{sid}")
+async def update_student(sid: str, body: Dict[str, Any], admin=Depends(get_current_admin)):
+    body.pop("id", None); body.pop("_id", None)
+    body.pop("enrollments", None); body.pop("batch", None); body.pop("course_info", None)
+    body["updated_at"] = now_iso()
+    r = await db.students.update_one({"id": sid}, {"$set": body})
+    if r.matched_count == 0:
+        raise HTTPException(404, "Student not found")
+    if body.get("status"):
+        latest = await db.student_enrollments.find_one({"student_id": sid}, {"_id": 0}, sort=[("created_at", -1)])
+        if latest:
+            await db.student_enrollments.update_one({"id": latest["id"]}, {"$set": {"status": body["status"], "updated_at": now_iso()}})
+    return await enrich_student(await db.students.find_one({"id": sid}, {"_id": 0}))
+
+@api.post("/admin/students/{sid}/enroll")
+async def add_enrollment(sid: str, body: Dict[str, Any], admin=Depends(get_current_admin)):
+    if not (body.get("course_id") and body.get("batch_id")):
+        raise HTTPException(400, "Course and batch are required")
+    override = bool(body.pop("override_capacity", False))
+    info = await batch_seats(body["batch_id"])
+    if info and not override and info["available"] <= 0:
+        raise HTTPException(400, "Batch is full. Please select another batch.")
+    e = await make_enrollment(sid, body["course_id"], body["batch_id"], body.get("joining_date", ""), body.get("status", "Active"))
+    await db.students.update_one({"id": sid}, {"$set": {
+        "course_id": body["course_id"], "batch_id": body["batch_id"], "updated_at": now_iso()}})
+    return e
+
+@api.delete("/admin/students/{sid}")
+async def delete_student(sid: str, admin=Depends(get_current_admin)):
+    await db.students.delete_one({"id": sid})
+    await db.student_enrollments.delete_many({"student_id": sid})
+    return {"ok": True}
+
+@api.post("/admin/enquiries/{eid}/convert")
+async def convert_enquiry(eid: str, body: Dict[str, Any], admin=Depends(get_current_admin)):
+    enq = await db.enquiries.find_one({"id": eid}, {"_id": 0})
+    if not enq:
+        raise HTTPException(404, "Enquiry not found")
+    if await db.students.find_one({"enquiry_id": eid}):
+        raise HTTPException(400, "This enquiry has already been converted to a student")
+    course_id = body.get("course_id") or enq.get("course_id")
+    batch_id = body.get("batch_id") or enq.get("batch_id")
+    override = bool(body.get("override_capacity", False))
+    if batch_id:
+        info = await batch_seats(batch_id)
+        if info and not override and info["available"] <= 0:
+            raise HTTPException(400, "Batch is full. Please select another batch.")
+    n = await db.students.count_documents({}) + 1
+    sid = new_id()
+    doc = {"id": sid, "student_id": gen_student_id(n), "enquiry_id": eid,
+           "full_name": enq.get("name", ""), "email": enq.get("email", ""), "mobile": enq.get("mobile", ""),
+           "whatsapp": enq.get("whatsapp", ""), "city": enq.get("city", ""),
+           "course_id": course_id, "batch_id": batch_id,
+           "training_mode": body.get("training_mode") or enq.get("mode", ""),
+           "trainer": body.get("trainer", ""), "photo_url": body.get("photo_url", ""),
+           "joining_date": body.get("joining_date") or now_iso()[:10],
+           "status": "Registered", "payment_status": body.get("payment_status", "Pending"),
+           "notes": body.get("notes", ""), "created_at": now_iso(), "updated_at": now_iso()}
+    await db.students.insert_one(dict(doc))
+    if course_id and batch_id:
+        await make_enrollment(sid, course_id, batch_id, doc["joining_date"], "Registered")
+    await db.enquiries.update_one({"id": eid}, {"$set": {"status": "Converted", "updated_at": now_iso()}})
+    return await enrich_student(await db.students.find_one({"id": sid}, {"_id": 0}))
+
+@api.get("/admin/batches/{batch_id}/students")
+async def batch_students(batch_id: str, admin=Depends(get_current_admin)):
+    info = await batch_seats(batch_id) or {"capacity": 0, "occupied": 0, "available": 0, "batch": {}}
+    studs = await db.students.find({"batch_id": batch_id}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return {"capacity": info["capacity"], "occupied": info["occupied"], "available": info["available"],
+            "batch": info.get("batch", {}), "students": studs}
+
+@api.get("/admin/students-stats")
+async def students_stats(admin=Depends(get_current_admin)):
+    studs = await db.students.find({}, {"_id": 0}).to_list(10000)
+    courses = {c["id"]: c["name"] for c in await db.courses.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(500)}
+    by_status, by_course, by_month = {}, {}, {}
+    for s in studs:
+        st = s.get("status", "Registered"); by_status[st] = by_status.get(st, 0) + 1
+        cn = courses.get(s.get("course_id"), "Unassigned"); by_course[cn] = by_course.get(cn, 0) + 1
+        m = (s.get("created_at") or "")[:7]
+        if m: by_month[m] = by_month.get(m, 0) + 1
+    return {
+        "total": len(studs), "registered": by_status.get("Registered", 0), "active": by_status.get("Active", 0),
+        "completed": by_status.get("Completed", 0), "on_hold": by_status.get("On Hold", 0),
+        "dropped": by_status.get("Dropped", 0) + by_status.get("Cancelled", 0),
+        "by_status": [{"name": k, "value": v} for k, v in by_status.items()],
+        "by_course": sorted([{"name": k, "value": v} for k, v in by_course.items()], key=lambda x: -x["value"])[:6],
+        "by_month": [{"name": k, "value": v} for k, v in sorted(by_month.items())][-6:],
+    }
+
+@api.get("/admin/students-export")
+async def export_students(admin=Depends(get_current_admin)):
+    studs = await db.students.find({}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    courses = {c["id"]: c["name"] for c in await db.courses.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(500)}
+    buf = io.StringIO(); w = csv.writer(buf)
+    w.writerow(["Student ID", "Name", "Mobile", "Email", "WhatsApp", "Course", "Batch",
+                "Trainer", "Mode", "Joining Date", "Status", "Registration Date"])
+    for s in studs:
+        b = await db.batches.find_one({"id": s.get("batch_id")}, {"_id": 0}) if s.get("batch_id") else {}
+        w.writerow([s.get("student_id"), s.get("full_name"), s.get("mobile"), s.get("email"),
+                    s.get("whatsapp"), courses.get(s.get("course_id"), ""),
+                    (b or {}).get("start_date", ""), s.get("trainer") or (b or {}).get("trainer", ""),
+                    s.get("training_mode"), s.get("joining_date"), s.get("status"), (s.get("created_at") or "")[:10]])
+    buf.seek(0)
+    return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=students.csv"})
 
 
 app.include_router(api)

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { NavLink, Outlet, useNavigate, Navigate } from "react-router-dom";
-import { LayoutDashboard, BookOpen, CalendarDays, Users, Inbox, Star, FileText, HelpCircle, Image as ImageIcon, Video, CalendarHeart, Award, Palette, Settings as SettingsIcon, LogOut, Menu, X, Cloud, Mail, ShieldCheck, BadgeCheck } from "lucide-react";
+import { LayoutDashboard, BookOpen, CalendarDays, Users, Inbox, Star, FileText, HelpCircle, Image as ImageIcon, Video, CalendarHeart, Award, Palette, Settings as SettingsIcon, LogOut, Menu, X, Cloud, Mail, ShieldCheck, BadgeCheck, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { Loader } from "@/components/site/SiteLayout";
@@ -10,6 +10,7 @@ const NAV = [
   { to: "/admin/enquiries", label: "Enquiries", Icon: Inbox },
   { to: "/admin/r/courses", label: "Courses", Icon: BookOpen },
   { to: "/admin/r/batches", label: "Batches", Icon: CalendarDays },
+  { to: "/admin/students", label: "Students", Icon: GraduationCap },
   { to: "/admin/r/trainers", label: "Trainers", Icon: Users },
   { to: "/admin/r/testimonials", label: "Testimonials", Icon: Star },
   { to: "/admin/r/blog", label: "Blog", Icon: FileText },
