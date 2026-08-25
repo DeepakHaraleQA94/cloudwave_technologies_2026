@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Plus, Pencil, Trash2, Search, Eye } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Eye, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { api, formatApiError, formatINR } from "@/lib/api";
+import { api, formatApiError, formatINR, mediaUrl } from "@/lib/api";
 import { toast } from "sonner";
 import { RESOURCES, JSON_FIELDS } from "./resourceConfig";
 import { FieldRenderer } from "./AdminShared";
@@ -22,6 +22,12 @@ export default function ResourceManager() {
   const [form, setForm] = useState({});
   const [delId, setDelId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [batchView, setBatchView] = useState(null);
+
+  const openBatchStudents = async (b) => {
+    try { const { data } = await api.get(`/admin/batches/${b.id}/students`); setBatchView({ ...data, name: b.course_name }); }
+    catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+  };
 
   const load = () => {
     setLoading(true);
@@ -96,6 +102,11 @@ export default function ResourceManager() {
               <TableRow key={it.id} data-testid={`row-${it.id}`}>
                 {cfg.columns.map(([k]) => <TableCell key={k}>{(k === pubField) ? <button onClick={() => togglePublish(it)} data-testid={`toggle-${it.id}`}>{cell(it, k)}</button> : cell(it, k)}</TableCell>)}
                 <TableCell className="text-right">
+                  {resource === "batches" && (
+                    <Button size="icon" variant="ghost" title="View students" data-testid={`batch-students-${it.id}`} onClick={() => openBatchStudents(it)}>
+                      <Users className="h-4 w-4 text-primary" />
+                    </Button>
+                  )}
                   {resource === "themes" && (
                     <Button size="icon" variant="ghost" title="Preview live" data-testid={`preview-${it.id}`}
                       onClick={() => { sessionStorage.setItem("cw_preview_theme", JSON.stringify(it)); window.open("/?preview=theme", "_blank"); }}>
@@ -130,6 +141,37 @@ export default function ResourceManager() {
           <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={del} data-testid="confirm-delete-btn" className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!batchView} onOpenChange={(o) => !o && setBatchView(null)}>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+          {batchView && (
+            <>
+              <DialogHeader><DialogTitle>Students — {batchView.name}</DialogTitle></DialogHeader>
+              <div className="mb-3 flex gap-3 text-sm">
+                <span className="rounded-lg bg-secondary/60 px-3 py-1">Total seats: <strong>{batchView.capacity}</strong></span>
+                <span className="rounded-lg bg-secondary/60 px-3 py-1">Occupied: <strong>{batchView.occupied}</strong></span>
+                <span className="rounded-lg bg-secondary/60 px-3 py-1">Available: <strong>{batchView.available}</strong></span>
+              </div>
+              {(!batchView.students || batchView.students.length === 0) ? (
+                <p className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">No students enrolled in this batch yet.</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {batchView.students.map((s) => (
+                    <div key={s.id} className="flex items-center gap-3 py-2.5" data-testid={`batch-student-${s.id}`}>
+                      {s.photo_url ? <img src={mediaUrl(s.photo_url)} alt={s.full_name} className="h-9 w-9 rounded-full object-cover" /> : <span className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">{(s.full_name || "?").charAt(0)}</span>}
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{s.full_name} <span className="font-mono text-xs text-muted-foreground">{s.student_id}</span></p>
+                        <p className="text-xs text-muted-foreground">{s.mobile} · {s.email || "—"}</p>
+                      </div>
+                      <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">{s.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
