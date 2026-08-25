@@ -172,7 +172,7 @@ export const RESOURCES = {
       { name: "placement_year", label: "Placement Year", type: "text" },
       { name: "placement_date", label: "Placement Date", type: "date" },
       { name: "story", label: "Success Story", type: "textarea", rows: 4, full: true },
-      { name: "linkedin_url", label: "LinkedIn URL", type: "text" },
+      { name: "linkedin_url", label: "", type: "text" },
       { name: "featured", label: "Featured", type: "switch" },
       { name: "published", label: "Published", type: "switch" },
     ],

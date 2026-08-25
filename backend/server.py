@@ -930,6 +930,43 @@ async def export_students(admin=Depends(get_current_admin)):
         headers={"Content-Disposition": "attachment; filename=students.csv"})
 
 
+# ------------------------------------------------------------------ CLAUDE AI ASSISTANT
+EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
+
+class AssistantIn(BaseModel):
+    message: str
+    history: Optional[List[Dict[str, Any]]] = []
+    session_id: Optional[str] = ""
+
+@api.post("/assistant/chat")
+async def assistant_chat(body: AssistantIn):
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(503, "AI assistant is not configured")
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    courses = await db.courses.find({"published": True},
+        {"_id": 0, "name": 1, "category": 1, "duration": 1, "level": 1, "fee": 1, "discounted_fee": 1, "short_description": 1}).to_list(100)
+    settings = await db.website_settings.find_one({"id": "main"}, {"_id": 0}) or {}
+    clist = "\n".join(f"- {c['name']} ({c.get('category','')}, {c.get('duration','')}, Fee Rs.{c.get('discounted_fee') or c.get('fee')}): {c.get('short_description','')}" for c in courses)
+    sys = (f"You are the friendly AI course assistant for {settings.get('institute_name','CloudWave Technologies')}, an IT training institute. "
+           "Help visitors find the right course, explain duration, fees, level and training mode, and warmly encourage them to submit an enquiry or contact the team. "
+           "Keep replies concise (2-5 sentences), professional and helpful. Only answer questions about the institute and its IT training. "
+           "If asked something unrelated or unknown, politely steer back and suggest contacting the team.\n\n"
+           f"Available courses:\n{clist}\n\n"
+           f"Contact: phone {settings.get('phone','')}, WhatsApp {settings.get('whatsapp','')}, email {settings.get('email','')}. "
+           "To enquire, tell them to click the 'Enquire Now' button or visit the Enquiry page.")
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=body.session_id or new_id(), system_message=sys).with_model("anthropic", "claude-sonnet-4-6")
+    hist = ""
+    for h in (body.history or [])[-6:]:
+        hist += f"\n{h.get('role','user')}: {h.get('content','')}"
+    prompt = (hist + "\nuser: " + body.message).strip() if hist else body.message
+    try:
+        reply = await chat.send_message(UserMessage(text=prompt))
+    except Exception as e:
+        logger.error(f"Assistant error: {e}")
+        raise HTTPException(500, "Assistant is temporarily unavailable")
+    return {"reply": reply if isinstance(reply, str) else str(reply)}
+
+
 app.include_router(api)
 
 app.add_middleware(

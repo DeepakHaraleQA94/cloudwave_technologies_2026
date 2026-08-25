@@ -5,6 +5,7 @@ import Footer from "./Footer";
 import WhatsAppButton from "./WhatsAppButton";
 import ThemeBanner from "./ThemeBanner";
 import ThemeDecorations from "./ThemeDecorations";
+import AIChat from "./AIChat";
 
 export default function SiteLayout() {
   return (
@@ -15,6 +16,7 @@ export default function SiteLayout() {
       <main className="flex-1"><Outlet /></main>
       <Footer />
       <WhatsAppButton />
+      <AIChat />
     </div>
   );
 }
