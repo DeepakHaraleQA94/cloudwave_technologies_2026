@@ -15,7 +15,7 @@ import { toast } from "sonner";
 const STATUS = ["Registered", "Active", "On Hold", "Completed", "Dropped", "Cancelled"];
 const PAY = ["Pending", "Partial", "Paid"];
 const SC = { Registered: "bg-blue-100 text-blue-700", Active: "bg-green-100 text-green-700", "On Hold": "bg-amber-100 text-amber-700", Completed: "bg-violet-100 text-violet-700", Dropped: "bg-red-100 text-red-700", Cancelled: "bg-slate-100 text-slate-600" };
-const EMPTY = { full_name: "", email: "", mobile: "", whatsapp: "", date_of_birth: "", gender: "", city: "", address: "", qualification: "", college: "", graduation_year: "", course_id: "", batch_id: "", trainer: "", training_mode: "", joining_date: "", status: "Registered", payment_status: "Pending", photo_url: "", notes: "" };
+const EMPTY = { full_name: "", email: "", mobile: "", whatsapp: "", date_of_birth: "", gender: "", city: "", address: "", qualification: "", college: "", graduation_year: "", course_id: "", batch_id: "", trainer: "", training_mode: "", joining_date: "", status: "Registered", payment_status: "Pending", paid_amount: "", photo_url: "", notes: "" };
 
 export default function Students() {
   const [data, setData] = useState({ items: [], total: 0 });
@@ -164,6 +164,7 @@ export default function Students() {
               <F label="Joining Date"><Input type="date" value={form.joining_date} onChange={(e) => set("joining_date", e.target.value)} /></F>
               <F label="Status"><Select value={form.status} onValueChange={(v) => set("status", v)}><SelectTrigger data-testid="student-status"><SelectValue /></SelectTrigger><SelectContent>{STATUS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></F>
               <F label="Payment Status"><Select value={form.payment_status} onValueChange={(v) => set("payment_status", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{PAY.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></F>
+              <F label="Amount Paid (₹)"><Input type="number" value={form.paid_amount} onChange={(e) => set("paid_amount", e.target.value)} placeholder="Exact amount received (offline)" data-testid="student-paid-amount" /></F>
               <div className="sm:col-span-2"><Label className="mb-1.5 block">Notes</Label><Textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
             </div>
           )}

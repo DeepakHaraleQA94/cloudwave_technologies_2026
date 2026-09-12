@@ -192,6 +192,7 @@ export const RESOURCES = {
       { name: "secondary_color", label: "Secondary Color (#hex)", type: "text" },
       { name: "accent_color", label: "Accent Color (#hex)", type: "text" },
       { name: "banner_image", label: "Banner Image", type: "image" },
+      { name: "banner_video", label: "Banner Video URL (YouTube/MP4, shows in homepage slider)", type: "text", full: true },
       { name: "announcement_text", label: "Announcement Banner Text", type: "textarea", full: true },
       { name: "cta_text", label: "CTA Text", type: "text" },
       { name: "cta_url", label: "CTA URL", type: "text" },

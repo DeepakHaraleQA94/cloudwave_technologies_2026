@@ -933,26 +933,55 @@ async def export_students(admin=Depends(get_current_admin)):
 
 
 # ------------------------------------------------------------------ PAYMENTS (provider-agnostic)
-CLOUDPAY_BASE_URL = os.environ.get("CLOUDPAY_BASE_URL", "").strip()
-CLOUDPAY_API_KEY = os.environ.get("CLOUDPAY_API_KEY", "").strip()
-CLOUDPAY_SECRET = os.environ.get("CLOUDPAY_SECRET", "").strip()
-CLOUDPAY_MODE = os.environ.get("CLOUDPAY_MODE", "test").strip()
+# Initial credential seed values (used only to seed the DB provider once; runtime reads from DB).
+ENV_CLOUDPAY = {
+    "base_url": os.environ.get("CLOUDPAY_BASE_URL", "").strip(),
+    "api_key": os.environ.get("CLOUDPAY_API_KEY", "").strip(),
+    "secret": os.environ.get("CLOUDPAY_SECRET", "").strip(),
+}
+SECRET_FIELDS = ("api_key", "secret")
 
 def course_price(course, currency):
     if currency == "USD":
         return float(course.get("price_usd") or 0)
     return float(course.get("discounted_fee") or course.get("fee") or 0)
 
-def cloudpay_configured():
-    return bool(CLOUDPAY_BASE_URL and CLOUDPAY_API_KEY and CLOUDPAY_SECRET)
+def provider_configured(prov):
+    prov = prov or {}
+    return bool(prov.get("base_url") and prov.get("api_key") and prov.get("secret"))
 
-async def cloudpay_create(order):
-    if not cloudpay_configured():
-        return {"status": "needs_config", "message": "CloudPay is not configured yet. Please contact the institute to complete your payment."}
+def provider_is_sandbox(prov):
+    # Sandbox (mock) when explicitly in sandbox mode OR when Live credentials are incomplete.
+    prov = prov or {}
+    return prov.get("mode", "sandbox") != "live" or not provider_configured(prov)
+
+def mask_provider(p):
+    out = dict(p)
+    for f in SECRET_FIELDS:
+        val = p.get(f) or ""
+        out[f + "_set"] = bool(val)
+        out[f] = ("\u2022\u2022\u2022\u2022" + val[-4:]) if len(val) >= 4 else ("\u2022\u2022\u2022\u2022" if val else "")
+    out["configured"] = provider_configured(p)
+    out["sandbox"] = provider_is_sandbox(p)
+    return out
+
+async def get_provider(pid):
+    return await db.payment_providers.find_one({"id": pid}, {"_id": 0})
+
+async def active_provider():
+    provs = await db.payment_providers.find({"enabled": True}, {"_id": 0}).to_list(50)
+    provs.sort(key=lambda x: x.get("priority", 0), reverse=True)
+    return provs[0] if provs else None
+
+async def cloudpay_create(prov, order):
+    # Sandbox/mock flow: hand the student off to our hosted mock checkout page.
+    if provider_is_sandbox(prov):
+        return {"status": "created", "gateway_ref": "SANDBOX-" + order["order_ref"],
+                "checkout_url": f"/payment/checkout?ref={order['order_ref']}", "sandbox": True}
     try:
         async with httpx.AsyncClient(timeout=20) as c:
-            r = await c.post(f"{CLOUDPAY_BASE_URL}/orders",
-                headers={"Authorization": f"Bearer {CLOUDPAY_API_KEY}", "X-Mode": CLOUDPAY_MODE},
+            r = await c.post(f"{prov['base_url'].rstrip('/')}/orders",
+                headers={"Authorization": f"Bearer {prov['api_key']}", "X-Mode": prov.get("mode", "live")},
                 json={"amount": order["amount"], "currency": order["currency"], "reference": order["order_ref"],
                       "customer": order.get("customer", {})})
         r.raise_for_status()
@@ -962,33 +991,31 @@ async def cloudpay_create(order):
         logger.error(f"CloudPay create failed: {e}")
         return {"status": "error", "message": "Unable to start payment. Please try again."}
 
-async def cloudpay_verify(gateway_ref):
-    if not cloudpay_configured() or not gateway_ref:
+async def cloudpay_verify(prov, order, sandbox_result="success"):
+    if provider_is_sandbox(prov):
+        return {"paid": sandbox_result != "fail"}
+    ref = order.get("gateway_ref")
+    if not ref:
         return {"paid": False}
     try:
         async with httpx.AsyncClient(timeout=20) as c:
-            r = await c.get(f"{CLOUDPAY_BASE_URL}/orders/{gateway_ref}",
-                headers={"Authorization": f"Bearer {CLOUDPAY_API_KEY}", "X-Mode": CLOUDPAY_MODE})
+            r = await c.get(f"{prov['base_url'].rstrip('/')}/orders/{ref}",
+                headers={"Authorization": f"Bearer {prov['api_key']}", "X-Mode": prov.get("mode", "live")})
         r.raise_for_status()
         return {"paid": r.json().get("status") in ("paid", "success", "captured")}
     except Exception as e:
         logger.error(f"CloudPay verify failed: {e}")
         return {"paid": False}
 
-async def provider_create_order(provider, order):
-    if provider == "cloudpay":
-        return await cloudpay_create(order)
-    return {"status": "error", "message": f"Provider '{provider}' is not enabled."}
+async def provider_create_order(prov, order):
+    if prov and prov["id"] == "cloudpay":
+        return await cloudpay_create(prov, order)
+    return {"status": "error", "message": f"Provider '{(prov or {}).get('id')}' is not enabled."}
 
-async def provider_verify(provider, gateway_ref):
-    if provider == "cloudpay":
-        return await cloudpay_verify(gateway_ref)
+async def provider_verify(prov, order, sandbox_result="success"):
+    if prov and prov["id"] == "cloudpay":
+        return await cloudpay_verify(prov, order, sandbox_result)
     return {"paid": False}
-
-async def active_provider():
-    provs = await db.payment_providers.find({"enabled": True}, {"_id": 0}).to_list(50)
-    provs.sort(key=lambda x: x.get("priority", 0), reverse=True)
-    return provs[0] if provs else None
 
 async def confirm_enrollment(order):
     if order.get("student_id"):
@@ -1018,8 +1045,10 @@ class OrderIn(BaseModel):
 @api.get("/payment/config")
 async def payment_config():
     p = await active_provider()
-    return {"provider": p["id"] if p else None, "currencies": (p or {}).get("currencies", ["INR", "USD"]),
-            "configured": cloudpay_configured() if (p and p["id"] == "cloudpay") else False}
+    return {"provider": p["id"] if p else None, "name": (p or {}).get("name"),
+            "currencies": (p or {}).get("currencies", ["INR", "USD"]),
+            "sandbox": provider_is_sandbox(p) if p else True,
+            "configured": provider_configured(p) if p else False}
 
 @api.post("/payment/create-order")
 async def create_order(body: OrderIn):
@@ -1044,25 +1073,40 @@ async def create_order(body: OrderIn):
     order = {"id": new_id(), "order_ref": f"CWO{datetime.now().strftime('%y%m')}{count:05d}",
              "course_id": course["id"], "course_name": course["name"], "batch_id": body.batch_id or "",
              "amount": amount, "currency": body.currency, "provider": prov["id"], "status": "pending",
-             "gateway_ref": "", "student_id": "",
+             "gateway_ref": "", "student_id": "", "sandbox": provider_is_sandbox(prov),
              "customer": {"name": body.name, "email": body.email, "mobile": body.mobile},
              "created_at": now_iso(), "updated_at": now_iso()}
-    res = await provider_create_order(prov["id"], order)
+    res = await provider_create_order(prov, order)
     order["gateway_ref"] = res.get("gateway_ref", "")
     await db.orders.insert_one(dict(order))
     return {"order_ref": order["order_ref"], "provider": prov["id"], "amount": amount, "currency": body.currency,
-            "status": res.get("status"), "checkout_url": res.get("checkout_url"), "message": res.get("message")}
+            "status": res.get("status"), "checkout_url": res.get("checkout_url"),
+            "sandbox": order["sandbox"], "message": res.get("message")}
+
+@api.get("/payment/order/{order_ref}")
+async def get_order_public(order_ref: str):
+    o = await db.orders.find_one({"order_ref": order_ref}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Order not found")
+    return {"order_ref": o["order_ref"], "course_name": o.get("course_name"), "amount": o.get("amount"),
+            "currency": o.get("currency"), "status": o.get("status"), "provider": o.get("provider"),
+            "sandbox": bool(o.get("sandbox")), "customer_name": (o.get("customer") or {}).get("name", "")}
 
 @api.post("/payment/verify")
 async def verify_payment(body: Dict[str, Any]):
     order = await db.orders.find_one({"order_ref": body.get("order_ref")}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order not found")
-    v = await provider_verify(order["provider"], order.get("gateway_ref"))
+    prov = await get_provider(order["provider"])
+    sandbox_result = body.get("sandbox_result", "success")
+    v = await provider_verify(prov, order, sandbox_result)
     if v.get("paid"):
         await db.orders.update_one({"id": order["id"]}, {"$set": {"status": "success", "updated_at": now_iso()}})
-        await confirm_enrollment(order)
-        return {"status": "success"}
+        sid = await confirm_enrollment(order)
+        return {"status": "success", "student_id": sid}
+    if sandbox_result == "fail":
+        await db.orders.update_one({"id": order["id"]}, {"$set": {"status": "failed", "updated_at": now_iso()}})
+        return {"status": "failed"}
     return {"status": order.get("status", "pending")}
 
 @api.post("/payment/webhook/{provider}")
@@ -1071,7 +1115,10 @@ async def payment_webhook(provider: str, body: Dict[str, Any]):
     order = await db.orders.find_one({"order_ref": ref}, {"_id": 0})
     if not order:
         return {"ok": True}
-    v = await provider_verify(provider, order.get("gateway_ref") or body.get("id"))
+    if body.get("id"):
+        order["gateway_ref"] = order.get("gateway_ref") or body.get("id")
+    prov = await get_provider(order["provider"])
+    v = await provider_verify(prov, order)
     if v.get("paid"):
         await db.orders.update_one({"id": order["id"]}, {"$set": {"status": "success", "updated_at": now_iso()}})
         await confirm_enrollment(order)
@@ -1080,15 +1127,22 @@ async def payment_webhook(provider: str, body: Dict[str, Any]):
 @api.get("/admin/payment-providers")
 async def list_providers(admin=Depends(get_current_admin)):
     provs = await db.payment_providers.find({}, {"_id": 0}).to_list(50)
-    for p in provs:
-        p["configured"] = cloudpay_configured() if p["id"] == "cloudpay" else False
-    return provs
+    return [mask_provider(p) for p in provs]
 
 @api.put("/admin/payment-providers/{pid}")
 async def update_provider(pid: str, body: Dict[str, Any], admin=Depends(get_current_admin)):
-    body.pop("id", None); body.pop("configured", None); body["updated_at"] = now_iso()
+    body.pop("id", None); body.pop("configured", None); body.pop("sandbox", None)
+    for f in SECRET_FIELDS:
+        body.pop(f + "_set", None)
+        if f in body:
+            v = body.get(f)
+            # Keep existing stored secret when the field is blank or still masked.
+            if v is None or v == "" or "\u2022" in str(v):
+                body.pop(f, None)
+    body["updated_at"] = now_iso()
     await db.payment_providers.update_one({"id": pid}, {"$set": body}, upsert=True)
-    return await db.payment_providers.find_one({"id": pid}, {"_id": 0})
+    p = await db.payment_providers.find_one({"id": pid}, {"_id": 0})
+    return mask_provider(p)
 
 @api.get("/admin/orders")
 async def list_orders(admin=Depends(get_current_admin)):
@@ -1134,7 +1188,15 @@ async def assistant_chat(body: AssistantIn):
 
 @api.get("/slides")
 async def public_slides():
-    return await pub_list("slides", "published")
+    slides = await pub_list("slides", "published")
+    at = (await active_theme()).get("theme")
+    if at and (at.get("banner_video") or at.get("banner_image")):
+        media = "video" if at.get("banner_video") else "image"
+        slides = [{"id": "festival-" + at["id"], "media_type": media,
+                   "image_url": at.get("banner_image", ""), "video_url": at.get("banner_video", ""),
+                   "title": at.get("name", ""), "description": at.get("announcement_text", ""),
+                   "festival": True, "sort_order": -1, "published": True}] + slides
+    return slides
 
 @api.get("/admin/batches/{batch_id}/financials")
 async def batch_financials(batch_id: str, admin=Depends(get_current_admin)):
@@ -1146,8 +1208,9 @@ async def batch_financials(batch_id: str, admin=Depends(get_current_admin)):
     expenses = await db.expenses.find({"batch_id": batch_id}, {"_id": 0}).to_list(2000)
     paid = [s for s in students if s.get("payment_status") == "Paid"]
     pending = [s for s in students if s.get("payment_status") != "Paid"]
+    online_ids = {o.get("student_id") for o in orders}
     online = sum(float(o.get("amount") or 0) for o in orders)
-    offline = max(len(paid) * fee - online, 0)
+    offline = sum(float(s.get("paid_amount") or fee) for s in paid if s["id"] not in online_ids)
     total = online + offline
     expected = len(students) * fee
     exp_total = sum(float(e.get("amount") or 0) for e in expenses)
@@ -1421,6 +1484,14 @@ async def seed_content():
                 "id": new_id(), "certificate_id": cid, "student_name": nm, "course": crs,
                 "issue_date": dt, "grade": grade, "published": True, "sort_order": i,
                 "created_at": now_iso(), "updated_at": now_iso()})
+
+    if await db.payment_providers.count_documents({}) == 0:
+        await db.payment_providers.insert_one({
+            "id": "cloudpay", "name": "CloudPay", "enabled": True, "priority": 100,
+            "currencies": ["INR", "USD"], "mode": "sandbox",
+            "base_url": ENV_CLOUDPAY["base_url"], "api_key": ENV_CLOUDPAY["api_key"],
+            "secret": ENV_CLOUDPAY["secret"],
+            "created_at": now_iso(), "updated_at": now_iso()})
 
     if await db.themes.count_documents({}) == 0:
         await db.themes.insert_one({

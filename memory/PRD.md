@@ -18,10 +18,21 @@ Full-stack, modern, responsive IT training institute website for "CloudWave Tech
 - Admin: JWT login/forgot-password, protected routes, sidebar dashboard, stats + 4 charts, Enquiry management (search/filter/pagination/view/status/notes/follow-up/delete/CSV export), generic CRUD for courses/batches/trainers/testimonials/faqs/blog/gallery/videos/events/placements/themes with image upload + publish toggles, Contact messages, Website Settings (tabbed), Users/Admins.
 - Dynamic theme system: time-based dark mode, festival/seasonal/admission themes with priority + date scheduling, accent color injection, banner (homepage + dashboard greeting).
 
+## Payments (CloudPay — provider-agnostic)
+- Credentials fully configurable from Admin Panel (/admin/payments): Base URL, API Key, API Secret, Mode (sandbox/live), Active toggle, Priority. Secrets stored server-side in `payment_providers` collection and NEVER returned to browser (masked as `••••1234`; `update_provider` ignores masked/blank values on round-trip).
+- Built-in Sandbox/mock flow: when mode != live OR credentials incomplete, `create-order` returns a hosted mock checkout at `/payment/checkout?ref=<order_ref>` (PaymentCheckout.jsx). `verify` simulates success/fail. Live mode calls the real CloudPay REST API. No permanent "contact institute" dead-end.
+- Flow: Course → Buy Now (BuyCourse.jsx) → create-order → CloudPay checkout → verify → auto-enroll student + batch. Endpoints: POST /api/payment/create-order, GET /api/payment/order/{ref}, POST /api/payment/verify, POST /api/payment/webhook/{provider}, GET/PUT /api/admin/payment-providers.
+- Twilio/WhatsApp alerts: user explicitly declined — NOT implemented.
+
+## Batch financials
+- Inline expense CRUD inside Batch dialog (ResourceManager.jsx) via /api/admin/data/expenses; feeds /api/admin/batches/{id}/financials.
+- Student exact offline paid amount (`paid_amount`) captured in Students.jsx; offline collection = sum of exact paid_amount for Paid offline students; net_profit = total_collection - expenses_total.
+
 ## Testing
-- Backend: 39/39 pytest passed. Frontend: all critical flows passed (iteration_1.json).
+- Backend: 39/39 (core) + 10/10 (payments/expenses/financials) pytest passed. Frontend: all critical CloudPay + expenses + paid_amount flows passed (iteration_2.json, Jun 2026).
 
 ## Backlog / Future (P2)
-- Full theme "Preview" tool & seasonal auto-decorations (snow/diyas) — banner + accent shifting done.
-- Multi-image album uploads for events; Instagram embed cards.
-- Atomic enquiry-id counter; per-resource server validation; explicit CORS origins for production.
+- CloudPay Go-Live: admin enters real credentials + switches Mode=Live (architecture ready & tested).
+- Encrypt payment secrets at rest (currently plaintext in Mongo); atomic order_ref/enquiry-id counters.
+- Split server.py (~1520 lines) into routers (payments/batches/auth/seed).
+- Full theme "Preview" tool & seasonal auto-decorations; multi-image event albums; explicit CORS origins for production.

@@ -25,6 +25,7 @@ import Gallery from "@/pages/public/Gallery";
 import Videos from "@/pages/public/Videos";
 import Events from "@/pages/public/Events";
 import VerifyCertificate from "@/pages/public/VerifyCertificate";
+import PaymentCheckout from "@/pages/public/PaymentCheckout";
 import { Privacy, Terms } from "@/pages/public/Legal";
 
 import Login from "@/pages/admin/Login";
@@ -74,6 +75,8 @@ function App() {
                   <Route path="/privacy" element={<Privacy />} />
                   <Route path="/terms" element={<Terms />} />
                 </Route>
+
+                <Route path="/payment/checkout" element={<PaymentCheckout />} />
 
                 <Route path="/admin/login" element={<Login />} />
                 <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>

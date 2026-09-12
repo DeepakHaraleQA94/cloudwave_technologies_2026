@@ -23,6 +23,7 @@ export default function ResourceManager() {
   const [delId, setDelId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [batchView, setBatchView] = useState(null);
+  const [expForm, setExpForm] = useState({ category: "", description: "", amount: "", expense_date: "" });
 
   const openBatchStudents = async (b) => {
     try {
@@ -32,6 +33,24 @@ export default function ResourceManager() {
       ]);
       setBatchView({ ...s.data, fin: f.data, id: b.id, name: b.course_name });
     } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+  };
+
+  const reloadBatchFin = async (bid) => {
+    const f = await api.get(`/admin/batches/${bid}/financials`);
+    setBatchView((p) => (p ? { ...p, fin: f.data } : p));
+  };
+  const addExpense = async (bid) => {
+    if (!expForm.amount) { toast.error("Enter an amount"); return; }
+    try {
+      await api.post("/admin/data/expenses", { ...expForm, amount: Number(expForm.amount), batch_id: bid });
+      toast.success("Expense added");
+      setExpForm({ category: "", description: "", amount: "", expense_date: "" });
+      reloadBatchFin(bid);
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+  };
+  const delExpense = async (eid, bid) => {
+    try { await api.delete(`/admin/data/expenses/${eid}`); reloadBatchFin(bid); }
+    catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
   };
 
   const downloadExcel = async (bid) => {
@@ -180,6 +199,31 @@ export default function ResourceManager() {
                     <span>Expenses: <strong>₹{(batchView.fin.expenses_total || 0).toLocaleString("en-IN")}</strong></span>
                     <span className="col-span-2 sm:col-span-1">Net Profit: <strong className="text-primary">₹{(batchView.fin.net_profit || 0).toLocaleString("en-IN")}</strong> ({batchView.fin.profit_margin}%)</span>
                   </div>
+                </div>
+              )}
+              {batchView.fin && (
+                <div className="mb-3 rounded-xl border border-border p-3 text-sm" data-testid="batch-expenses">
+                  <p className="mb-2 font-heading font-semibold">Expenses</p>
+                  {(batchView.fin.expenses || []).length > 0 ? (
+                    <div className="mb-3 divide-y divide-border">
+                      {batchView.fin.expenses.map((e) => (
+                        <div key={e.id} className="flex items-center justify-between py-1.5" data-testid={`expense-${e.id}`}>
+                          <div className="min-w-0"><span className="font-medium">{e.category || "General"}</span>{e.description ? <span className="ml-1 text-xs text-muted-foreground">— {e.description}</span> : null}{e.expense_date ? <span className="ml-1 text-xs text-muted-foreground">({e.expense_date})</span> : null}</div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className="font-medium">₹{Number(e.amount || 0).toLocaleString("en-IN")}</span>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => delExpense(e.id, batchView.id)} data-testid={`del-expense-${e.id}`}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="mb-3 text-xs text-muted-foreground">No expenses recorded yet.</p>}
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <Input placeholder="Category" value={expForm.category} onChange={(e) => setExpForm((p) => ({ ...p, category: e.target.value }))} data-testid="expense-category" />
+                    <Input placeholder="Description" value={expForm.description} onChange={(e) => setExpForm((p) => ({ ...p, description: e.target.value }))} data-testid="expense-description" />
+                    <Input type="number" placeholder="Amount ₹" value={expForm.amount} onChange={(e) => setExpForm((p) => ({ ...p, amount: e.target.value }))} data-testid="expense-amount" />
+                    <Input type="date" value={expForm.expense_date} onChange={(e) => setExpForm((p) => ({ ...p, expense_date: e.target.value }))} data-testid="expense-date" />
+                  </div>
+                  <Button size="sm" className="mt-2" onClick={() => addExpense(batchView.id)} data-testid="add-expense-btn"><Plus className="mr-1 h-3.5 w-3.5" /> Add Expense</Button>
                 </div>
               )}
               {(!batchView.students || batchView.students.length === 0) ? (

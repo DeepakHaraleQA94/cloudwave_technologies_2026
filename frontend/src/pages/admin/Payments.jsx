@@ -4,6 +4,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
@@ -29,33 +30,12 @@ export default function Payments() {
   return (
     <div>
       <h1 className="font-heading text-2xl font-bold">Payments & Gateways</h1>
-      <p className="mb-6 text-sm text-muted-foreground">Provider-agnostic. Configure gateways below; credentials are stored securely in server environment variables (never in the browser).</p>
+      <p className="mb-6 text-sm text-muted-foreground">Provider-agnostic. Configure gateways below. API keys and secrets are stored securely on the server and never sent back to the browser. CloudPay runs in <strong>Sandbox (mock)</strong> mode — fully testable end-to-end — until you switch to Live with valid credentials.</p>
 
       <h2 className="mb-3 font-heading text-lg font-semibold">Payment Providers</h2>
-      <div className="overflow-x-auto rounded-xl border border-border bg-card">
-        <Table>
-          <TableHeader><TableRow><TableHead>Provider</TableHead><TableHead>Enabled</TableHead><TableHead>Mode</TableHead><TableHead>Priority</TableHead><TableHead>Credentials</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {provs.map((p) => (
-              <TableRow key={p.id} data-testid={`provider-${p.id}`}>
-                <TableCell className="font-medium">{p.name} <span className="text-xs text-muted-foreground">({(p.currencies || []).join(", ")})</span></TableCell>
-                <TableCell><Switch checked={!!p.enabled} onCheckedChange={(v) => save(p, { enabled: v })} data-testid={`provider-toggle-${p.id}`} /></TableCell>
-                <TableCell>
-                  <Select value={p.mode || "test"} onValueChange={(v) => save(p, { mode: v })}>
-                    <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="test">Test / Sandbox</SelectItem><SelectItem value="live">Live</SelectItem></SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell><Input type="number" defaultValue={p.priority} className="w-20" onBlur={(e) => save(p, { priority: Number(e.target.value) })} /></TableCell>
-                <TableCell>{p.configured ? <Badge className="bg-green-100 text-green-700">Configured</Badge> : <Badge variant="secondary">Add keys in .env</Badge>}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <div className="space-y-4">
+        {provs.map((p) => <ProviderCard key={p.id} p={p} onSave={save} />)}
       </div>
-      {!provs.some((p) => p.configured && p.enabled) && (
-        <p className="mt-2 text-xs text-muted-foreground">CloudPay activates automatically once <code>CLOUDPAY_BASE_URL</code>, <code>CLOUDPAY_API_KEY</code> and <code>CLOUDPAY_SECRET</code> are set in backend environment variables.</p>
-      )}
 
       <div className="mt-8 flex items-center justify-between">
         <h2 className="font-heading text-lg font-semibold">Orders</h2>
@@ -78,6 +58,50 @@ export default function Payments() {
               ))}
           </TableBody>
         </Table>
+      </div>
+    </div>
+  );
+}
+
+function ProviderCard({ p, onSave }) {
+  const [d, setD] = useState({ base_url: p.base_url && !String(p.base_url).includes("•") ? p.base_url : (p.base_url || ""), api_key: "", secret: "", mode: p.mode === "live" ? "live" : "sandbox", priority: p.priority ?? 100 });
+  const set = (k, v) => setD((x) => ({ ...x, [k]: v }));
+  const save = () => {
+    const patch = { base_url: d.base_url, mode: d.mode, priority: Number(d.priority) };
+    if (d.api_key) patch.api_key = d.api_key;
+    if (d.secret) patch.secret = d.secret;
+    onSave(p, patch);
+  };
+  return (
+    <div className="rounded-xl border border-border bg-card p-4" data-testid={`provider-${p.id}`}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="font-heading text-base font-semibold">{p.name}</span>
+          <span className="text-xs text-muted-foreground">({(p.currencies || []).join(", ")})</span>
+          {p.enabled
+            ? (p.sandbox ? <Badge className="bg-blue-100 text-blue-700" data-testid={`provider-status-${p.id}`}>Sandbox (mock)</Badge> : <Badge className="bg-green-100 text-green-700" data-testid={`provider-status-${p.id}`}>Live · Configured</Badge>)
+            : <Badge variant="secondary" data-testid={`provider-status-${p.id}`}>Inactive</Badge>}
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Active</span>
+          <Switch checked={!!p.enabled} onCheckedChange={(v) => onSave(p, { enabled: v })} data-testid={`provider-toggle-${p.id}`} />
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div><Label className="mb-1 block text-xs">Base URL</Label><Input value={d.base_url} onChange={(e) => set("base_url", e.target.value)} placeholder="https://api.cloudpay.example/v1" data-testid={`${p.id}-base-url`} /></div>
+        <div><Label className="mb-1 block text-xs">Mode</Label>
+          <Select value={d.mode} onValueChange={(v) => set("mode", v)}>
+            <SelectTrigger data-testid={`${p.id}-mode`}><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="sandbox">Sandbox / Test (mock)</SelectItem><SelectItem value="live">Live</SelectItem></SelectContent>
+          </Select>
+        </div>
+        <div><Label className="mb-1 block text-xs">API Key {p.api_key_set && <span className="text-green-600">· saved ({p.api_key})</span>}</Label><Input value={d.api_key} onChange={(e) => set("api_key", e.target.value)} placeholder={p.api_key_set ? "Enter new value to replace" : "Enter API key"} data-testid={`${p.id}-api-key`} /></div>
+        <div><Label className="mb-1 block text-xs">API Secret {p.secret_set && <span className="text-green-600">· saved ({p.secret})</span>}</Label><Input type="password" value={d.secret} onChange={(e) => set("secret", e.target.value)} placeholder={p.secret_set ? "Enter new value to replace" : "Enter secret"} data-testid={`${p.id}-secret`} /></div>
+        <div><Label className="mb-1 block text-xs">Priority</Label><Input type="number" value={d.priority} onChange={(e) => set("priority", e.target.value)} className="w-28" data-testid={`${p.id}-priority`} /></div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Button size="sm" onClick={save} data-testid={`${p.id}-save`}>Save Configuration</Button>
+        {d.mode === "live" && !p.secret_set && !d.secret && <span className="text-xs text-amber-600">Live mode needs valid credentials; otherwise checkout safely runs in mock mode.</span>}
       </div>
     </div>
   );
