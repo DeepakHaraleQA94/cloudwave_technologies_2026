@@ -31,6 +31,7 @@ import Login from "@/pages/admin/Login";
 import Dashboard from "@/pages/admin/Dashboard";
 import Enquiries from "@/pages/admin/Enquiries";
 import Students from "@/pages/admin/Students";
+import Payments from "@/pages/admin/Payments";
 import ResourceManager from "@/pages/admin/ResourceManager";
 import Settings from "@/pages/admin/Settings";
 import ContactMessages from "@/pages/admin/ContactMessages";
@@ -79,6 +80,7 @@ function App() {
                   <Route index element={<Dashboard />} />
                   <Route path="enquiries" element={<Enquiries />} />
                   <Route path="students" element={<Students />} />
+                  <Route path="payments" element={<Payments />} />
                   <Route path="messages" element={<ContactMessages />} />
                   <Route path="settings" element={<Settings />} />
                   <Route path="users" element={<Users />} />

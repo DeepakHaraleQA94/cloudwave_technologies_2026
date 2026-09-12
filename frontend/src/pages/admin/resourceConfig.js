@@ -23,6 +23,7 @@ export const RESOURCES = {
       { name: "mode", label: "Training Mode", type: "select", options: MODES },
       { name: "fee", label: "Fee (₹)", type: "number" },
       { name: "discounted_fee", label: "Discounted Fee (₹)", type: "number" },
+      { name: "price_usd", label: "Price (USD, for international students)", type: "number" },
       { name: "certification", label: "Certification", type: "text" },
       { name: "prerequisites", label: "Prerequisites", type: "textarea", full: true },
       { name: "learning_outcomes", label: "Learning Outcomes", type: "tags", full: true },

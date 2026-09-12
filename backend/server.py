@@ -930,6 +930,169 @@ async def export_students(admin=Depends(get_current_admin)):
         headers={"Content-Disposition": "attachment; filename=students.csv"})
 
 
+# ------------------------------------------------------------------ PAYMENTS (provider-agnostic)
+CLOUDPAY_BASE_URL = os.environ.get("CLOUDPAY_BASE_URL", "").strip()
+CLOUDPAY_API_KEY = os.environ.get("CLOUDPAY_API_KEY", "").strip()
+CLOUDPAY_SECRET = os.environ.get("CLOUDPAY_SECRET", "").strip()
+CLOUDPAY_MODE = os.environ.get("CLOUDPAY_MODE", "test").strip()
+
+def course_price(course, currency):
+    if currency == "USD":
+        return float(course.get("price_usd") or 0)
+    return float(course.get("discounted_fee") or course.get("fee") or 0)
+
+def cloudpay_configured():
+    return bool(CLOUDPAY_BASE_URL and CLOUDPAY_API_KEY and CLOUDPAY_SECRET)
+
+async def cloudpay_create(order):
+    if not cloudpay_configured():
+        return {"status": "needs_config", "message": "CloudPay is not configured yet. Please contact the institute to complete your payment."}
+    try:
+        async with httpx.AsyncClient(timeout=20) as c:
+            r = await c.post(f"{CLOUDPAY_BASE_URL}/orders",
+                headers={"Authorization": f"Bearer {CLOUDPAY_API_KEY}", "X-Mode": CLOUDPAY_MODE},
+                json={"amount": order["amount"], "currency": order["currency"], "reference": order["order_ref"],
+                      "customer": order.get("customer", {})})
+        r.raise_for_status()
+        d = r.json()
+        return {"status": "created", "gateway_ref": d.get("id"), "checkout_url": d.get("checkout_url")}
+    except Exception as e:
+        logger.error(f"CloudPay create failed: {e}")
+        return {"status": "error", "message": "Unable to start payment. Please try again."}
+
+async def cloudpay_verify(gateway_ref):
+    if not cloudpay_configured() or not gateway_ref:
+        return {"paid": False}
+    try:
+        async with httpx.AsyncClient(timeout=20) as c:
+            r = await c.get(f"{CLOUDPAY_BASE_URL}/orders/{gateway_ref}",
+                headers={"Authorization": f"Bearer {CLOUDPAY_API_KEY}", "X-Mode": CLOUDPAY_MODE})
+        r.raise_for_status()
+        return {"paid": r.json().get("status") in ("paid", "success", "captured")}
+    except Exception as e:
+        logger.error(f"CloudPay verify failed: {e}")
+        return {"paid": False}
+
+async def provider_create_order(provider, order):
+    if provider == "cloudpay":
+        return await cloudpay_create(order)
+    return {"status": "error", "message": f"Provider '{provider}' is not enabled."}
+
+async def provider_verify(provider, gateway_ref):
+    if provider == "cloudpay":
+        return await cloudpay_verify(gateway_ref)
+    return {"paid": False}
+
+async def active_provider():
+    provs = await db.payment_providers.find({"enabled": True}, {"_id": 0}).to_list(50)
+    provs.sort(key=lambda x: x.get("priority", 0), reverse=True)
+    return provs[0] if provs else None
+
+async def confirm_enrollment(order):
+    if order.get("student_id"):
+        return order["student_id"]
+    n = await db.students.count_documents({}) + 1
+    sid = new_id()
+    cust = order.get("customer", {})
+    await db.students.insert_one({
+        "id": sid, "student_id": gen_student_id(n), "full_name": cust.get("name", ""),
+        "email": cust.get("email", ""), "mobile": cust.get("mobile", ""),
+        "course_id": order.get("course_id"), "batch_id": order.get("batch_id"),
+        "status": "Registered", "payment_status": "Paid", "training_mode": "",
+        "joining_date": now_iso()[:10], "created_at": now_iso(), "updated_at": now_iso()})
+    if order.get("course_id") and order.get("batch_id"):
+        await make_enrollment(sid, order["course_id"], order["batch_id"], now_iso()[:10], "Registered")
+    await db.orders.update_one({"id": order["id"]}, {"$set": {"student_id": sid, "updated_at": now_iso()}})
+    return sid
+
+class OrderIn(BaseModel):
+    course_id: str
+    batch_id: Optional[str] = ""
+    currency: str = "INR"
+    name: str
+    email: EmailStr
+    mobile: str
+
+@api.get("/payment/config")
+async def payment_config():
+    p = await active_provider()
+    return {"provider": p["id"] if p else None, "currencies": (p or {}).get("currencies", ["INR", "USD"]),
+            "configured": cloudpay_configured() if (p and p["id"] == "cloudpay") else False}
+
+@api.post("/payment/create-order")
+async def create_order(body: OrderIn):
+    course = await db.courses.find_one({"id": body.course_id, "published": True}, {"_id": 0})
+    if not course:
+        course = await db.courses.find_one({"slug": body.course_id}, {"_id": 0})
+    if not course:
+        raise HTTPException(404, "Course not found")
+    if body.currency not in ("INR", "USD"):
+        raise HTTPException(400, "Unsupported currency")
+    amount = course_price(course, body.currency)
+    if amount <= 0:
+        raise HTTPException(400, f"This course has no {body.currency} price configured.")
+    prov = await active_provider()
+    if not prov:
+        raise HTTPException(503, "No payment provider is enabled. Please contact the institute.")
+    if body.batch_id:
+        info = await batch_seats(body.batch_id)
+        if info and info["available"] <= 0:
+            raise HTTPException(400, "Batch is full. Please select another batch.")
+    count = await db.orders.count_documents({}) + 1
+    order = {"id": new_id(), "order_ref": f"CWO{datetime.now().strftime('%y%m')}{count:05d}",
+             "course_id": course["id"], "course_name": course["name"], "batch_id": body.batch_id or "",
+             "amount": amount, "currency": body.currency, "provider": prov["id"], "status": "pending",
+             "gateway_ref": "", "student_id": "",
+             "customer": {"name": body.name, "email": body.email, "mobile": body.mobile},
+             "created_at": now_iso(), "updated_at": now_iso()}
+    res = await provider_create_order(prov["id"], order)
+    order["gateway_ref"] = res.get("gateway_ref", "")
+    await db.orders.insert_one(dict(order))
+    return {"order_ref": order["order_ref"], "provider": prov["id"], "amount": amount, "currency": body.currency,
+            "status": res.get("status"), "checkout_url": res.get("checkout_url"), "message": res.get("message")}
+
+@api.post("/payment/verify")
+async def verify_payment(body: Dict[str, Any]):
+    order = await db.orders.find_one({"order_ref": body.get("order_ref")}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    v = await provider_verify(order["provider"], order.get("gateway_ref"))
+    if v.get("paid"):
+        await db.orders.update_one({"id": order["id"]}, {"$set": {"status": "success", "updated_at": now_iso()}})
+        await confirm_enrollment(order)
+        return {"status": "success"}
+    return {"status": order.get("status", "pending")}
+
+@api.post("/payment/webhook/{provider}")
+async def payment_webhook(provider: str, body: Dict[str, Any]):
+    ref = body.get("reference") or body.get("order_ref")
+    order = await db.orders.find_one({"order_ref": ref}, {"_id": 0})
+    if not order:
+        return {"ok": True}
+    v = await provider_verify(provider, order.get("gateway_ref") or body.get("id"))
+    if v.get("paid"):
+        await db.orders.update_one({"id": order["id"]}, {"$set": {"status": "success", "updated_at": now_iso()}})
+        await confirm_enrollment(order)
+    return {"ok": True}
+
+@api.get("/admin/payment-providers")
+async def list_providers(admin=Depends(get_current_admin)):
+    provs = await db.payment_providers.find({}, {"_id": 0}).to_list(50)
+    for p in provs:
+        p["configured"] = cloudpay_configured() if p["id"] == "cloudpay" else False
+    return provs
+
+@api.put("/admin/payment-providers/{pid}")
+async def update_provider(pid: str, body: Dict[str, Any], admin=Depends(get_current_admin)):
+    body.pop("id", None); body.pop("configured", None); body["updated_at"] = now_iso()
+    await db.payment_providers.update_one({"id": pid}, {"$set": body}, upsert=True)
+    return await db.payment_providers.find_one({"id": pid}, {"_id": 0})
+
+@api.get("/admin/orders")
+async def list_orders(admin=Depends(get_current_admin)):
+    return await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+
+
 # ------------------------------------------------------------------ CLAUDE AI ASSISTANT
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 

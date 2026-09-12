@@ -9,6 +9,7 @@ import { useGet } from "@/hooks/usePublic";
 import { useSite } from "@/context/SiteContext";
 import { mediaUrl, formatINR } from "@/lib/api";
 import { BatchRow, TestimonialCard } from "@/components/site/cards";
+import BuyCourse from "@/components/site/BuyCourse";
 import SEO from "@/components/site/SEO";
 
 const FALLBACK = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=70";
@@ -49,6 +50,7 @@ export default function CourseDetail() {
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button size="lg" className="rounded-full" onClick={() => nav(`/enquiry?course=${c.id}`)} data-testid="course-enquire-btn">Enquire About This Course</Button>
+              <BuyCourse course={c} />
               {settings.whatsapp && <Button asChild size="lg" variant="outline" className="rounded-full border-white/20 bg-transparent text-white hover:bg-white/10"><a href={`https://wa.me/${settings.whatsapp}?text=${waMsg}`} target="_blank" rel="noreferrer"><MessageCircle className="mr-1 h-4 w-4" /> WhatsApp</a></Button>}
             </div>
           </div>
