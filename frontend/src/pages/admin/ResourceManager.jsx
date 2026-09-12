@@ -25,8 +25,21 @@ export default function ResourceManager() {
   const [batchView, setBatchView] = useState(null);
 
   const openBatchStudents = async (b) => {
-    try { const { data } = await api.get(`/admin/batches/${b.id}/students`); setBatchView({ ...data, name: b.course_name }); }
-    catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    try {
+      const [s, f] = await Promise.all([
+        api.get(`/admin/batches/${b.id}/students`),
+        api.get(`/admin/batches/${b.id}/financials`),
+      ]);
+      setBatchView({ ...s.data, fin: f.data, id: b.id, name: b.course_name });
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+  };
+
+  const downloadExcel = async (bid) => {
+    try {
+      const res = await api.get(`/admin/batches/${bid}/excel`, { responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a"); a.href = url; a.download = `batch-${bid.slice(0, 8)}.xlsx`; a.click(); URL.revokeObjectURL(url);
+    } catch { toast.error("Export failed"); }
   };
 
   const load = () => {
@@ -152,6 +165,23 @@ export default function ResourceManager() {
                 <span className="rounded-lg bg-secondary/60 px-3 py-1">Occupied: <strong>{batchView.occupied}</strong></span>
                 <span className="rounded-lg bg-secondary/60 px-3 py-1">Available: <strong>{batchView.available}</strong></span>
               </div>
+              {batchView.fin && (
+                <div className="mb-3 rounded-xl border border-border p-3 text-sm">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="font-heading font-semibold">Batch Financial Summary</p>
+                    <Button size="sm" variant="outline" onClick={() => downloadExcel(batchView.id)} data-testid="batch-excel-btn">Download Excel</Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-y-1 sm:grid-cols-3">
+                    <span>Expected: <strong>₹{(batchView.fin.expected || 0).toLocaleString("en-IN")}</strong></span>
+                    <span>Online: <strong>₹{(batchView.fin.online || 0).toLocaleString("en-IN")}</strong></span>
+                    <span>Offline: <strong>₹{(batchView.fin.offline || 0).toLocaleString("en-IN")}</strong></span>
+                    <span>Collected: <strong className="text-green-600">₹{(batchView.fin.total_collection || 0).toLocaleString("en-IN")}</strong></span>
+                    <span>Pending: <strong className="text-amber-600">₹{(batchView.fin.pending_collection || 0).toLocaleString("en-IN")}</strong></span>
+                    <span>Expenses: <strong>₹{(batchView.fin.expenses_total || 0).toLocaleString("en-IN")}</strong></span>
+                    <span className="col-span-2 sm:col-span-1">Net Profit: <strong className="text-primary">₹{(batchView.fin.net_profit || 0).toLocaleString("en-IN")}</strong> ({batchView.fin.profit_margin}%)</span>
+                  </div>
+                </div>
+              )}
               {(!batchView.students || batchView.students.length === 0) ? (
                 <p className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">No students enrolled in this batch yet.</p>
               ) : (

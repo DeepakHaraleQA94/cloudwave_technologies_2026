@@ -213,6 +213,33 @@ export const RESOURCES = {
     ],
     defaults: { published: true },
   },
+  expenses: {
+    title: "Batch Expenses", singular: "Expense", titleField: "category",
+    columns: [["batch_id", "Batch ID"], ["category", "Category"], ["amount", "Amount"], ["expense_date", "Date"]],
+    fields: [
+      { name: "batch_id", label: "Batch ID (copy from Batches)", type: "text", full: true },
+      { name: "category", label: "Category", type: "select", options: ["Trainer/Teaching", "Software/Tools", "Infrastructure", "Marketing", "Internet", "Electricity", "Equipment", "Maintenance", "Other"] },
+      { name: "description", label: "Description", type: "text", full: true },
+      { name: "amount", label: "Amount (₹)", type: "number" },
+      { name: "expense_date", label: "Date", type: "date" },
+      { name: "notes", label: "Notes", type: "textarea", full: true },
+    ],
+    defaults: { category: "Other" },
+  },
+  slides: {
+    title: "Homepage Slider", singular: "Slide", titleField: "title",
+    columns: [["title", "Title"], ["media_type", "Type"], ["sort_order", "Order"], ["published", "Published"]],
+    fields: [
+      { name: "media_type", label: "Media Type", type: "select", options: ["image", "video"] },
+      { name: "image_url", label: "Image (for image type)", type: "image" },
+      { name: "video_url", label: "Video URL (for video type)", type: "text", full: true, hint: "MP4/webm URL or YouTube URL" },
+      { name: "title", label: "Title", type: "text", full: true },
+      { name: "description", label: "Description", type: "textarea", full: true },
+      { name: "sort_order", label: "Display Order", type: "number" },
+      { name: "published", label: "Published", type: "switch" },
+    ],
+    defaults: { media_type: "image", published: true, sort_order: 0 },
+  },
 };
 
 export const JSON_FIELDS = { courses: ["syllabus"] };

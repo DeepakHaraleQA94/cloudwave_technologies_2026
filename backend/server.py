@@ -300,6 +300,8 @@ RESOURCES = {
     "placements": ("placements", "published"),
     "themes": ("themes", None),
     "certificates": ("certificates", "published"),
+    "expenses": ("expenses", None),
+    "slides": ("slides", "published"),
 }
 
 def clean(doc):
@@ -1128,6 +1130,66 @@ async def assistant_chat(body: AssistantIn):
         logger.error(f"Assistant error: {e}")
         raise HTTPException(500, "Assistant is temporarily unavailable")
     return {"reply": reply if isinstance(reply, str) else str(reply)}
+
+
+@api.get("/slides")
+async def public_slides():
+    return await pub_list("slides", "published")
+
+@api.get("/admin/batches/{batch_id}/financials")
+async def batch_financials(batch_id: str, admin=Depends(get_current_admin)):
+    b = await db.batches.find_one({"id": batch_id}, {"_id": 0}) or {}
+    course = await db.courses.find_one({"id": b.get("course_id")}, {"_id": 0}) if b.get("course_id") else None
+    fee = float((course or {}).get("discounted_fee") or (course or {}).get("fee") or 0)
+    students = await db.students.find({"batch_id": batch_id}, {"_id": 0}).to_list(2000)
+    orders = await db.orders.find({"batch_id": batch_id, "status": "success"}, {"_id": 0}).to_list(2000)
+    expenses = await db.expenses.find({"batch_id": batch_id}, {"_id": 0}).to_list(2000)
+    paid = [s for s in students if s.get("payment_status") == "Paid"]
+    pending = [s for s in students if s.get("payment_status") != "Paid"]
+    online = sum(float(o.get("amount") or 0) for o in orders)
+    offline = max(len(paid) * fee - online, 0)
+    total = online + offline
+    expected = len(students) * fee
+    exp_total = sum(float(e.get("amount") or 0) for e in expenses)
+    net = total - exp_total
+    margin = (net / total * 100) if total > 0 else 0
+    return {"fee": fee, "total_students": len(students), "paid_students": len(paid), "pending_students": len(pending),
+            "expected": expected, "online": online, "offline": offline, "total_collection": total,
+            "pending_collection": max(expected - total, 0), "expenses_total": exp_total,
+            "net_profit": net, "profit_margin": round(margin, 1), "expenses": expenses}
+
+@api.get("/admin/batches/{batch_id}/excel")
+async def batch_excel(batch_id: str, admin=Depends(get_current_admin)):
+    from openpyxl import Workbook
+    fin = await batch_financials(batch_id, admin)
+    b = await db.batches.find_one({"id": batch_id}, {"_id": 0}) or {}
+    courses = {c["id"]: c["name"] for c in await db.courses.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(500)}
+    students = await db.students.find({"batch_id": batch_id}, {"_id": 0}).to_list(2000)
+    orders = {o.get("student_id"): o for o in await db.orders.find({"batch_id": batch_id}, {"_id": 0}).to_list(2000)}
+    wb = Workbook()
+    s1 = wb.active; s1.title = "Students"
+    s1.append(["Student ID", "Name", "Course", "Batch", "Payment Type", "Payment Status", "Amount", "Txn/Order Ref", "Address", "Enrollment Date", "Payment Date"])
+    for s in students:
+        o = orders.get(s["id"])
+        s1.append([s.get("student_id"), s.get("full_name"), courses.get(s.get("course_id"), ""), b.get("start_date", ""),
+                   "Online" if o else "Offline", s.get("payment_status", ""), (o or {}).get("amount", ""),
+                   (o or {}).get("order_ref", ""), s.get("address", ""), (s.get("created_at") or "")[:10], s.get("joining_date", "")])
+    s2 = wb.create_sheet("Payment Collection")
+    for row in [["Expected Collection", fin["expected"]], ["Online Collection", fin["online"]], ["Offline Collection", fin["offline"]],
+                ["Total Successful Collection", fin["total_collection"]], ["Pending Collection", fin["pending_collection"]],
+                ["Paid Student Count", fin["paid_students"]], ["Pending Student Count", fin["pending_students"]]]:
+        s2.append(row)
+    s3 = wb.create_sheet("Expenses")
+    s3.append(["Expense ID", "Date", "Category", "Description", "Amount", "Notes"])
+    for e in fin["expenses"]:
+        s3.append([e.get("id", "")[:8], e.get("expense_date", ""), e.get("category", ""), e.get("description", ""), e.get("amount", ""), e.get("notes", "")])
+    s4 = wb.create_sheet("Profit Summary")
+    for row in [["Total Collection", fin["total_collection"]], ["Total Expenses", fin["expenses_total"]],
+                ["Net Profit", fin["net_profit"]], ["Profit Margin (%)", fin["profit_margin"]]]:
+        s4.append(row)
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="batch-{batch_id[:8]}.xlsx"'})
 
 
 app.include_router(api)

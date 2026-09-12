@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Section, SectionHeading } from "@/components/site/SiteLayout";
 import { CourseCard, TrainerCard, TestimonialCard, BlogCard, BatchRow } from "@/components/site/cards";
+import HomeSlider from "@/components/site/HomeSlider";
 import { useGet } from "@/hooks/usePublic";
 import { useSite } from "@/context/SiteContext";
 import { mediaUrl } from "@/lib/api";
@@ -40,6 +41,7 @@ export default function Home() {
   return (
     <div>
       <SEO title={`${settings.institute_name || "CloudWave Technologies"} — IT Training Institute`} description={settings.hero_description} />
+      <HomeSlider />
 
       {/* HERO */}
       <section className="relative overflow-hidden bg-slate-950 text-white">
