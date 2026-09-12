@@ -31,6 +31,12 @@ Full-stack, modern, responsive IT training institute website for "CloudWave Tech
 ## Testing
 - Backend: 39/39 (core) + 10/10 (payments/expenses/financials) pytest passed. Frontend: all critical CloudPay + expenses + paid_amount flows passed (iteration_2.json, Jun 2026).
 
+## Branding & Slider (Jun 2026, frontend-only)
+- Homepage hero slider (HomeSlider.jsx) now shows TWO slides side-by-side on desktop (md+) and ONE on mobile; same slide data/admin upload, autoplay, arrows and indicators preserved; translateX carousel inside overflow-hidden (no page scroll, verified 390px).
+- Admin-controlled logo DISPLAY size (`logo_scale`), optional logo effect (`logo_effect`: normal/3d/rotation) with `logo_effect_enabled` toggle — applied to Navbar + Footer logos via CSS (.logo-effect-3d / .logo-effect-rotate in App.css, respects prefers-reduced-motion). Uploaded logo file untouched.
+- Website/Application name (`institute_name`) already configurable and reflects in header, footer and browser tab (white-label ready).
+- New admin Settings → "Branding" tab (Settings.jsx) with name input, size slider, effect select, enable switch and a Live Preview. All persist via existing PUT /api/admin/settings (no new endpoints; backend unchanged).
+
 ## Backlog / Future (P2)
 - CloudPay Go-Live: admin enters real credentials + switches Mode=Live (architecture ready & tested).
 - Encrypt payment secrets at rest (currently plaintext in Mongo); atomic order_ref/enquiry-id counters.

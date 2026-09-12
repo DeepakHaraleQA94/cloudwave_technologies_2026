@@ -1,1 +1,14 @@
 .App { min-height: 100vh; }
+
+/* Admin-configurable logo display effects */
+.logo-fx { transition: transform 0.4s ease, filter 0.4s ease; }
+.logo-effect-3d {
+  transform: perspective(500px) rotateY(-14deg);
+  filter: drop-shadow(5px 5px 5px rgba(0, 0, 0, 0.28));
+}
+.logo-effect-3d:hover { transform: perspective(500px) rotateY(0deg); }
+.logo-effect-rotate { animation: cwLogoSpin 7s linear infinite; transform-style: preserve-3d; }
+@keyframes cwLogoSpin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .logo-effect-rotate { animation: none; }
+}

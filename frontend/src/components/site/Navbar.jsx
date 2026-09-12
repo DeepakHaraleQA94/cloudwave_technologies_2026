@@ -17,21 +17,34 @@ const LINKS = [
   { to: "/contact", label: "Contact" },
 ];
 
+export function logoFxClass(settings) {
+  const fx = settings.logo_effect_enabled ? (settings.logo_effect || "normal") : "normal";
+  return fx === "3d" ? "logo-fx logo-effect-3d" : fx === "rotation" ? "logo-fx logo-effect-rotate" : "";
+}
+export function logoScale(settings) {
+  return Math.min(Math.max(Number(settings.logo_scale) || 1, 0.6), 1.6);
+}
+
 export function Logo({ light }) {
   const { settings } = useSite();
+  const scale = logoScale(settings);
+  const fxClass = logoFxClass(settings);
   if (settings.logo_url) {
     return (
-      <Link to="/" className="flex items-center" data-testid="site-logo">
-        <img src={mediaUrl(settings.logo_url)} alt={settings.institute_name || "CloudWave Technologies"} className="h-11 w-auto object-contain sm:h-12" />
+      <Link to="/" className="flex items-center" data-testid="site-logo" style={{ perspective: "600px" }}>
+        <img src={mediaUrl(settings.logo_url)} alt={settings.institute_name || "CloudWave Technologies"}
+          className={`w-auto object-contain ${fxClass}`} style={{ height: `calc(2.75rem * ${scale})` }} />
       </Link>
     );
   }
   return (
-    <Link to="/" className="flex items-center gap-2.5 group" data-testid="site-logo">
-      <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+    <Link to="/" className="flex items-center gap-2.5 group" data-testid="site-logo" style={{ perspective: "600px" }}>
+      <span className={`grid place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm ${fxClass}`}
+        style={{ height: `calc(2.25rem * ${scale})`, width: `calc(2.25rem * ${scale})` }}>
         <Cloud className="h-5 w-5" />
       </span>
-      <span className={`font-heading text-lg font-bold tracking-tight ${light ? "text-white" : "text-foreground"}`}>
+      <span className={`font-heading font-bold tracking-tight ${light ? "text-white" : "text-foreground"}`}
+        style={{ fontSize: `calc(1.125rem * ${scale})` }}>
         {settings.institute_name || "CloudWave"}
         <span className="text-brand-accent">.</span>
       </span>

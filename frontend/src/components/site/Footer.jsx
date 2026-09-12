@@ -17,7 +17,11 @@ export default function Footer() {
         <div>
           <div className="flex items-center gap-2.5">
             {settings.logo_url ? (
-              <img src={mediaUrl(settings.logo_url)} alt={settings.institute_name || "CloudWave Technologies"} className="h-12 w-auto object-contain rounded-md bg-white/95 p-1.5" />
+              <span style={{ perspective: "600px" }}>
+                <img src={mediaUrl(settings.logo_url)} alt={settings.institute_name || "CloudWave Technologies"}
+                  className={`w-auto object-contain rounded-md bg-white/95 p-1.5 ${settings.logo_effect_enabled && settings.logo_effect === "3d" ? "logo-fx logo-effect-3d" : settings.logo_effect_enabled && settings.logo_effect === "rotation" ? "logo-fx logo-effect-rotate" : ""}`}
+                  style={{ height: `calc(3rem * ${Math.min(Math.max(Number(settings.logo_scale) || 1, 0.6), 1.6)})` }} />
+              </span>
             ) : (
               <>
                 <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground">

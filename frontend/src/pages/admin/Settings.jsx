@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api, formatApiError } from "@/lib/api";
+import { mediaUrl } from "@/lib/api";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { ImageUpload } from "./AdminShared";
 import { useSite } from "@/context/SiteContext";
 import { Loader } from "@/components/site/SiteLayout";
@@ -29,6 +32,10 @@ export default function Settings() {
   if (!form) return <Loader />;
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
+  const scale = Math.min(Math.max(Number(form.logo_scale) || 1, 0.6), 1.6);
+  const fx = form.logo_effect_enabled ? (form.logo_effect || "normal") : "normal";
+  const fxClass = fx === "3d" ? "logo-fx logo-effect-3d" : fx === "rotation" ? "logo-fx logo-effect-rotate" : "";
+
   const save = async () => {
     setSaving(true);
     try { await api.put("/admin/settings", form); toast.success("Settings saved"); refresh(); }
@@ -43,7 +50,7 @@ export default function Settings() {
         <Button onClick={save} disabled={saving} data-testid="settings-save-btn"><Save className="mr-1 h-4 w-4" /> {saving ? "Saving..." : "Save Changes"}</Button>
       </div>
       <Tabs defaultValue="General">
-        <TabsList className="mb-4 flex-wrap">{Object.keys(GROUPS).map((g) => <TabsTrigger key={g} value={g} data-testid={`settings-tab-${g}`}>{g}</TabsTrigger>)}</TabsList>
+        <TabsList className="mb-4 flex-wrap">{Object.keys(GROUPS).map((g) => <TabsTrigger key={g} value={g} data-testid={`settings-tab-${g}`}>{g}</TabsTrigger>)}<TabsTrigger value="Branding" data-testid="settings-tab-Branding">Branding</TabsTrigger></TabsList>
         {Object.entries(GROUPS).map(([g, fields]) => (
           <TabsContent key={g} value={g}>
             <div className="grid gap-5 rounded-xl border border-border bg-card p-6 sm:grid-cols-2">
@@ -69,6 +76,52 @@ export default function Settings() {
             </div>
           </TabsContent>
         ))}
+        <TabsContent value="Branding">
+          <div className="grid gap-6 rounded-xl border border-border bg-card p-6 lg:grid-cols-2">
+            <div className="space-y-6">
+              <div>
+                <Label className="mb-1.5 block">Website / Application Name</Label>
+                <Input value={form.institute_name || ""} onChange={(e) => set("institute_name", e.target.value)} placeholder="e.g. ABC Academy" data-testid="setting-institute_name-branding" />
+                <p className="mt-1 text-xs text-muted-foreground">Shown across the header, footer and browser tab. Used for future white-labelling.</p>
+              </div>
+              <div>
+                <Label className="mb-2 block">Logo Display Size — {Math.round(scale * 100)}%</Label>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span>smaller</span>
+                  <Slider min={0.6} max={1.6} step={0.05} value={[scale]} onValueChange={(v) => set("logo_scale", v[0])} className="flex-1" data-testid="setting-logo_scale" />
+                  <span>larger</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">Only the display size changes — your uploaded logo file is untouched.</p>
+              </div>
+              <div>
+                <Label className="mb-1.5 block">Logo Effect</Label>
+                <Select value={form.logo_effect || "normal"} onValueChange={(v) => set("logo_effect", v)}>
+                  <SelectTrigger data-testid="setting-logo_effect"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="3d">3D</SelectItem>
+                    <SelectItem value="rotation">Rotation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                <div><p className="text-sm font-medium">Enable Logo Effect</p><p className="text-xs text-muted-foreground">Off keeps the normal logo appearance.</p></div>
+                <Switch checked={!!form.logo_effect_enabled} onCheckedChange={(v) => set("logo_effect_enabled", v)} data-testid="setting-logo_effect_enabled" />
+              </div>
+            </div>
+            <div className="rounded-xl border border-dashed border-border bg-muted/30 p-6" data-testid="branding-preview">
+              <p className="mb-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">Live Preview</p>
+              <div className="flex min-h-[140px] items-center justify-center rounded-lg bg-background p-6" style={{ perspective: "600px" }}>
+                {form.logo_url ? (
+                  <img src={mediaUrl(form.logo_url)} alt="Logo preview" className={`w-auto object-contain ${fxClass}`} style={{ height: `calc(3rem * ${scale})` }} data-testid="branding-preview-logo" />
+                ) : (
+                  <span className={`font-heading font-bold text-foreground ${fxClass}`} style={{ fontSize: `calc(1.5rem * ${scale})` }} data-testid="branding-preview-name">{form.institute_name || "CloudWave"}<span className="text-brand-accent">.</span></span>
+                )}
+              </div>
+              <p className="mt-4 text-center text-sm text-muted-foreground">Header &amp; footer will display: <span className="font-medium text-foreground">{form.institute_name || "CloudWave"}</span></p>
+            </div>
+          </div>
+        </TabsContent>
       </Tabs>
     </div>
   );
