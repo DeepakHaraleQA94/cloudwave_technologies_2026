@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { NavLink, Outlet, useNavigate, Navigate } from "react-router-dom";
-import { LayoutDashboard, BookOpen, CalendarDays, Users, Inbox, Star, FileText, HelpCircle, Image as ImageIcon, Video, CalendarHeart, Award, Palette, Settings as SettingsIcon, LogOut, Menu, X, Cloud, Mail, ShieldCheck, BadgeCheck, GraduationCap, CreditCard } from "lucide-react";
+import { LayoutDashboard, BookOpen, CalendarDays, Users, Inbox, Star, FileText, HelpCircle, Image as ImageIcon, Video, CalendarHeart, Award, Palette, Settings as SettingsIcon, LogOut, Menu, X, Cloud, Mail, ShieldCheck, BadgeCheck, GraduationCap, CreditCard, Cpu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { Loader } from "@/components/site/SiteLayout";
@@ -15,6 +15,7 @@ const NAV = [
   { to: "/admin/r/testimonials", label: "Testimonials", Icon: Star },
   { to: "/admin/r/blog", label: "Blog", Icon: FileText },
   { to: "/admin/r/faqs", label: "FAQs", Icon: HelpCircle },
+  { to: "/admin/technologies", label: "Technologies", Icon: Cpu },
   { section: "Media" },
   { to: "/admin/r/gallery", label: "Photo Gallery", Icon: ImageIcon },
   { to: "/admin/r/videos", label: "Videos", Icon: Video },

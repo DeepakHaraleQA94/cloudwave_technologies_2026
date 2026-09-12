@@ -18,6 +18,13 @@ Full-stack, modern, responsive IT training institute website for "CloudWave Tech
 - Admin: JWT login/forgot-password, protected routes, sidebar dashboard, stats + 4 charts, Enquiry management (search/filter/pagination/view/status/notes/follow-up/delete/CSV export), generic CRUD for courses/batches/trainers/testimonials/faqs/blog/gallery/videos/events/placements/themes with image upload + publish toggles, Contact messages, Website Settings (tabbed), Users/Admins.
 - Dynamic theme system: time-based dark mode, festival/seasonal/admission themes with priority + date scheduling, accent color injection, banner (homepage + dashboard greeting).
 
+## Technologies We Teach (Jun 2026)
+- New dynamic homepage section (added after the "End-to-End Software Development Training" services section; existing sections untouched). Component: components/site/TechShowcase.jsx (public) + admin/Technologies.jsx (manager).
+- Admin (/admin/technologies): Add/Edit/Deactivate/Reorder technologies; SVG icon support (inline `svg_icon` or `icon_url`, with colored-monogram fallback); assign each tech to a Daily Theme (everyday or a weekday); accent color; description.
+- Card Presentation (global, stored in website_settings tech_* keys): Animation Style (Static, Fade, Slow Blink, Slide, Zoom, Rotate, 3D Flip, Tilt, Float, Bounce, Pulse, Glow, Shimmer, Carousel), Speed, Direction, Delay, Loop, Hover Effect; Live Preview + Save. CSS in App.css; respects prefers-reduced-motion.
+- Public GET /api/technologies returns active techs filtered by current server weekday (everyday + today; falls back to all active) + presentation. Weekday names are NEVER shown to visitors. Backend: RESOURCES["technologies"], seed of 11 techs.
+- Tested: iteration_3.json — 100% backend (15/15) + 100% frontend (CRUD/reorder/toggle/delete/preview/save, public render, responsive). AWS/Windows use monogram (no simpleicons logo exists).
+
 ## Payments (CloudPay — provider-agnostic)
 - Credentials fully configurable from Admin Panel (/admin/payments): Base URL, API Key, API Secret, Mode (sandbox/live), Active toggle, Priority. Secrets stored server-side in `payment_providers` collection and NEVER returned to browser (masked as `••••1234`; `update_provider` ignores masked/blank values on round-trip).
 - Built-in Sandbox/mock flow: when mode != live OR credentials incomplete, `create-order` returns a hosted mock checkout at `/payment/checkout?ref=<order_ref>` (PaymentCheckout.jsx). `verify` simulates success/fail. Live mode calls the real CloudPay REST API. No permanent "contact institute" dead-end.

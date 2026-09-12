@@ -12,3 +12,59 @@
 @media (prefers-reduced-motion: reduce) {
   .logo-effect-rotate { animation: none; }
 }
+
+/* ---------------- Technologies We Teach showcase ---------------- */
+.tech-card {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  padding: 1.25rem 1rem; border-radius: 0.85rem; border: 1px solid hsl(var(--border));
+  background: hsl(var(--card)); box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  transition: transform .35s ease, box-shadow .35s ease, border-color .35s ease;
+  will-change: transform, opacity;
+}
+.tech-svg { display: inline-block; }
+.tech-svg svg, .tech-svg img { width: 100%; height: 100%; object-fit: contain; }
+
+/* hover effects */
+.tech-hover-3d-tilt:hover { transform: perspective(600px) rotateX(6deg) rotateY(-6deg) scale(1.04); box-shadow: 0 12px 30px rgba(0,0,0,0.12); }
+.tech-hover-zoom:hover { transform: scale(1.06); }
+.tech-hover-lift:hover { transform: translateY(-6px); box-shadow: 0 12px 30px rgba(0,0,0,0.12); }
+.tech-hover-glow:hover { box-shadow: 0 0 26px var(--tech-color, #2563eb); border-color: var(--tech-color, #2563eb); }
+
+/* per-card animation styles (duration/delay/iteration set inline) */
+.tech-anim-fade { animation-name: techFade; animation-timing-function: ease; animation-fill-mode: both; }
+@keyframes techFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.tech-anim-blink { animation-name: techBlink; animation-timing-function: ease-in-out; }
+@keyframes techBlink { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+.tech-anim-zoom { animation-name: techZoom; animation-timing-function: ease; animation-fill-mode: both; }
+@keyframes techZoom { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: scale(1); } }
+.tech-anim-rotate { animation-name: techRotate; animation-timing-function: ease-in-out; }
+@keyframes techRotate { 0% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } 100% { transform: rotate(-4deg); } }
+.tech-anim-flip { animation-name: techFlip; animation-timing-function: ease-in-out; transform-style: preserve-3d; }
+@keyframes techFlip { 0% { transform: perspective(700px) rotateY(0); } 50% { transform: perspective(700px) rotateY(180deg); } 100% { transform: perspective(700px) rotateY(360deg); } }
+.tech-anim-tilt { animation-name: techTilt; animation-timing-function: ease-in-out; }
+@keyframes techTilt { 0%,100% { transform: perspective(600px) rotateX(0) rotateY(0); } 50% { transform: perspective(600px) rotateX(7deg) rotateY(-7deg); } }
+.tech-anim-float { animation-name: techFloat; animation-timing-function: ease-in-out; }
+@keyframes techFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.tech-anim-bounce { animation-name: techBounce; animation-timing-function: cubic-bezier(.28,.84,.42,1); }
+@keyframes techBounce { 0%,100% { transform: translateY(0); } 30% { transform: translateY(-14px); } 50% { transform: translateY(0); } 70% { transform: translateY(-7px); } }
+.tech-anim-pulse { animation-name: techPulse; animation-timing-function: ease-in-out; }
+@keyframes techPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+.tech-anim-glow { animation-name: techGlow; animation-timing-function: ease-in-out; }
+@keyframes techGlow { 0%,100% { box-shadow: 0 0 0 rgba(37,99,235,0); } 50% { box-shadow: 0 0 22px var(--tech-color,#2563eb); } }
+.tech-anim-shimmer { position: relative; overflow: hidden; }
+.tech-anim-shimmer::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.5) 50%, transparent 70%); transform: translateX(-100%); animation: techShimmer 2.4s linear infinite; }
+@keyframes techShimmer { to { transform: translateX(100%); } }
+
+/* marquee (Slide / Carousel) */
+.tech-marquee { overflow: hidden; width: 100%;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+.tech-marquee-track { display: flex; gap: 1rem; width: max-content; animation-name: techMarquee; animation-timing-function: linear; }
+.tech-marquee:hover .tech-marquee-track { animation-play-state: paused; }
+.tech-marquee-track .tech-card { width: 160px; flex: 0 0 auto; }
+@keyframes techMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tech-card[class*="tech-anim-"], .tech-marquee-track, .tech-anim-shimmer::after { animation: none !important; }
+  .tech-card { opacity: 1 !important; transform: none !important; }
+}

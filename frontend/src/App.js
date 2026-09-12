@@ -34,6 +34,7 @@ import Enquiries from "@/pages/admin/Enquiries";
 import Students from "@/pages/admin/Students";
 import Payments from "@/pages/admin/Payments";
 import ResourceManager from "@/pages/admin/ResourceManager";
+import Technologies from "@/pages/admin/Technologies";
 import Settings from "@/pages/admin/Settings";
 import ContactMessages from "@/pages/admin/ContactMessages";
 import Users from "@/pages/admin/Users";
@@ -87,6 +88,7 @@ function App() {
                   <Route path="messages" element={<ContactMessages />} />
                   <Route path="settings" element={<Settings />} />
                   <Route path="users" element={<Users />} />
+                  <Route path="technologies" element={<Technologies />} />
                   <Route path="r/:resource" element={<ResourceManager />} />
                 </Route>
               </Routes>

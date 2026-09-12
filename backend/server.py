@@ -302,6 +302,7 @@ RESOURCES = {
     "certificates": ("certificates", "published"),
     "expenses": ("expenses", None),
     "slides": ("slides", "published"),
+    "technologies": ("technologies", "active"),
 }
 
 def clean(doc):
@@ -453,6 +454,24 @@ async def public_placements(course: Optional[str] = None, company: Optional[str]
     if company: extra["company_name"] = company
     if year: extra["placement_year"] = year
     return await pub_list("placements", "published", extra)
+
+DAY_NAMES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+TECH_PRESENTATION_DEFAULTS = {
+    "tech_style": "Float", "tech_speed": 5, "tech_direction": "left",
+    "tech_delay": 150, "tech_loop": True, "tech_hover": "3d-tilt",
+}
+
+@api.get("/technologies")
+async def public_technologies():
+    today = DAY_NAMES[datetime.now().weekday()]
+    techs = await db.technologies.find({"active": True}, {"_id": 0}).to_list(500)
+    techs.sort(key=lambda x: (x.get("sort_order", 0), x.get("created_at", "")))
+    shown = [t for t in techs if (t.get("day_theme") or "everyday") in ("everyday", today)]
+    if not shown:
+        shown = techs
+    s = await db.website_settings.find_one({"id": "main"}, {"_id": 0}) or {}
+    pres = {k: (s.get(k) if s.get(k) is not None else v) for k, v in TECH_PRESENTATION_DEFAULTS.items()}
+    return {"technologies": shown, "presentation": pres}
 
 @api.get("/certificates/verify")
 async def verify_certificate(cid: str):
@@ -1484,6 +1503,28 @@ async def seed_content():
                 "id": new_id(), "certificate_id": cid, "student_name": nm, "course": crs,
                 "issue_date": dt, "grade": grade, "published": True, "sort_order": i,
                 "created_at": now_iso(), "updated_at": now_iso()})
+
+    if await db.technologies.count_documents({}) == 0:
+        _icon = "https://cdn.simpleicons.org"
+        _seed = [
+            ("Web Development", "html5", "everyday", "#E34F26"),
+            ("React", "react", "everyday", "#61DAFB"),
+            ("Node.js", "nodedotjs", "everyday", "#5FA04E"),
+            ("AWS", "", "everyday", "#FF9900"),
+            ("Docker", "docker", "monday", "#2496ED"),
+            ("Kubernetes", "kubernetes", "tuesday", "#326CE5"),
+            ("Android Apps", "android", "wednesday", "#3DDC84"),
+            ("iOS Apps", "apple", "thursday", "#555555"),
+            ("Selenium", "selenium", "friday", "#43B02A"),
+            ("Playwright", "playwright", "friday", "#2EAD33"),
+            ("Windows Apps", "", "saturday", "#0078D4"),
+        ]
+        await db.technologies.insert_many([{
+            "id": new_id(), "name": nm, "slug_icon": sl,
+            "icon_url": (f"{_icon}/{sl}/{col.lstrip('#')}" if sl else ""), "svg_icon": "",
+            "color": col, "day_theme": day, "description": "", "active": True,
+            "sort_order": i, "created_at": now_iso(), "updated_at": now_iso(),
+        } for i, (nm, sl, day, col) in enumerate(_seed)])
 
     if await db.payment_providers.count_documents({}) == 0:
         await db.payment_providers.insert_one({

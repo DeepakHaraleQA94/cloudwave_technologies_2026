@@ -7,6 +7,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Section, SectionHeading } from "@/components/site/SiteLayout";
 import { CourseCard, TrainerCard, TestimonialCard, BlogCard, BatchRow } from "@/components/site/cards";
 import HomeSlider from "@/components/site/HomeSlider";
+import TechShowcase from "@/components/site/TechShowcase";
 import { useGet } from "@/hooks/usePublic";
 import { useSite } from "@/context/SiteContext";
 import { mediaUrl } from "@/lib/api";
@@ -129,6 +130,9 @@ export default function Home() {
           ))}
         </div>
       </Section>
+
+      {/* TECHNOLOGIES WE TEACH */}
+      <TechShowcase />
 
       {/* POPULAR COURSES */}
       <div className="bg-secondary/40 py-20">
