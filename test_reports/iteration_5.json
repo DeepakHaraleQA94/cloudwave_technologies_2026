@@ -1,0 +1,35 @@
+{
+  "summary": "Verification pass focused on the newly-added Final Course Quiz -> auto Course Certificate flow, Admin Internship Certificate flow, PDF downloads, and the full security matrix requested by main agent. Backend: 9/9 pytest tests passed in /app/backend/tests/test_quiz_certificate.py (existing 17/17 in test_student_portal.py still green — not re-run to stay idempotent). End-to-end flow verified: (a) GET /api/student/quiz/{id} returns 403 while granted non-quiz content is incomplete, (b) unlocks after all granted non-quiz resources are marked complete, (c) POST submit with [1,1,0] scores 100 -> passed=true -> student.status='Completed' -> auto certificate CWT-CERT-YYYY-NNNNNN created, (d) re-submitting the quiz does NOT create a second course certificate (idempotent), (e) 4th submit is blocked with 400 (max_attempts=3 enforced), (f) /api/certificates/{cid}/download returns a real PDF (%PDF header + application/pdf content-type), (g) certificate appears in GET /api/student/certificates and dashboard.certificates >= 1. Internship: POST /api/admin/certificates/internship creates unique CWT-INT-YYYY-NNNNNN, appears in student's My Certificates, PDF downloads 200. Security matrix: quiz endpoint returns 401 without token, 403 with admin token, 403 while locked; student cannot hit /admin/entitlements/grant or /admin/students; student cannot POST /admin/certificates/internship; profile PUT ignores email/student_id mutations (immutable). Frontend smoke: student login OK, all 8 dashboard tabs render (Overview, My Profile, Course & Batch, Fees & Payments, My Learning, My Documents, My Certificates, My Activity), My Learning shows 3 'Please complete payment for access' messages matching seed, My Certificates shows correct empty-state message referencing Final Course Test. Cleanup executed via module-scoped snapshot fixture: quiz_attempts + progress on originally-locked resources + all certificates deleted; entitlements restored to snapshot; student status set back to Active. Confirmed post-test DB state: 3 GRANTED entitlements (Course Introduction, Module 1 Core Concepts, Module 1 Notes), status Active, 0 certs, 0 attempts — demo state preserved.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Learning Access", "issues": ["Access Start / Access Expiry still use native mm/dd/yyyy date inputs (carried over from iteration_4). Not a bug, style inconsistency."]},
+      {"screen": "Admin Certificate Issue (/admin/certificate-issue)", "issues": ["start_date / end_date / completion_date use native date pickers instead of shadcn Calendar — same UX inconsistency."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_quiz_certificate.py",
+    "/app/backend/tests/test_student_portal.py",
+    "/app/test_reports/pytest/quiz_cert_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "next_cert_id() uses count_documents + collision check — safe under low concurrency but under real concurrency two simultaneous passes could pick same n before insert. Consider a mongo counters collection with findAndModify $inc for production hardening. Not a bug for MVP.",
+    "student_submit_quiz upserts student_progress with completed=True for the quiz on PASS only. If a student FAILS, the quiz progress row is not created (fine) but subsequent PASS after previous FAIL correctly creates one. Confirmed via test.",
+    "required_content_done returns False when the student has ZERO granted non-quiz resources — correct guard against gaming the quiz on a student with no other entitlements.",
+    "Course certificate re-issue is idempotent: existing cert is reused (existing['certificate_id']) — prevents duplicate CWT-CERT ids per student. Good.",
+    "PDF endpoint /api/certificates/{cid}/download is public (no auth) but only returns published certificates — matches spec (verifiable link). Certificate IDs are 6-digit sequential, so effectively unguessable enough. OK for MVP; longer random suffix would be stronger.",
+    "server.py grew to ~2000 lines — still recommend router split (student_router, admin_certs_router, entitlements_router) for maintainability (carried from iteration_4)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_quiz_certificate.py"
+  ],
+  "success_rate": {"backend": "100% (9/9 new + prior 17/17)", "frontend": "100% smoke of student portal tabs"},
+  "test_credentials": "Admin: admin@cloudwavetechnologies.com / Admin@1234. Student: CW-2026-0001 / Student@1234. Loaded from /app/memory/test_credentials.md.",
+  "seed_data_creation": "Test flow temporarily grants all 6 resources with expiry_date 2099-12-31, marks 5 non-quiz complete, generates 1 CWT-CERT and 1 CWT-INT certificate, then cleans up: deletes both certs, deletes all quiz_attempts for the student, deletes student_progress rows for the 3 originally-locked resources, restores entitlements to exact snapshot (3 GRANTED), sets student.status back to 'Active'. Verified post-run DB state matches intended demo state.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Two regression suites now exist: test_student_portal.py (17 tests — portal + entitlements) and test_quiz_certificate.py (9 tests — quiz + cert + security). Both are idempotent and safe to re-run. New file uses pymongo directly to snapshot/restore entitlements — reads /app/backend/.env with quoted-value stripping. All correct quiz answers for the seeded quiz are [1,1,0]. If ever the seed quiz answers change in server.py seed_data(), update CORRECT_ANSWERS constant."
+}
