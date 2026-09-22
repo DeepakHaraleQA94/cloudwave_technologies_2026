@@ -150,6 +150,8 @@ async def get_media(mid: str):
     rec = await db.media_files.find_one({"id": mid}, {"_id": 0})
     if not rec:
         raise HTTPException(404, "Not found")
+    if rec.get("private"):
+        raise HTTPException(403, "This file is private")
     return Response(content=base64.b64decode(rec["data"]),
                     media_type=rec["content_type"],
                     headers={"Cache-Control": "public, max-age=31536000"})
@@ -303,6 +305,7 @@ RESOURCES = {
     "expenses": ("expenses", None),
     "slides": ("slides", "published"),
     "technologies": ("technologies", "active"),
+    "learning_resources": ("learning_resources", None),
 }
 
 def clean(doc):
@@ -949,6 +952,340 @@ async def export_students(admin=Depends(get_current_admin)):
     buf.seek(0)
     return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=students.csv"})
+
+
+# ================================================================ STUDENT PORTAL
+LEARNING_TYPES = ["Video", "Audio", "Audio Overview", "Video Overview", "Notes", "PDF", "Slide Deck", "Mind Map", "Reports", "Flashcards", "Quiz", "Infographic", "Data Table", "Document", "External Resource"]
+STUDENT_EDITABLE = {"first_name", "last_name", "mobile", "dob", "gender", "address", "city", "state", "country", "pincode", "photo_url"}
+
+def create_student_token(sid, email):
+    payload = {"sub": sid, "email": email or "", "role": "student",
+               "exp": datetime.now(timezone.utc) + timedelta(days=7), "type": "access"}
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
+
+async def get_current_student(request: Request) -> dict:
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else request.cookies.get("student_token")
+    if not token:
+        raise HTTPException(401, "Not authenticated")
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(401, "Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, "Invalid token")
+    if payload.get("role") != "student":
+        raise HTTPException(403, "Not a student session")
+    s = await db.students.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+    if not s:
+        raise HTTPException(401, "Student not found")
+    return s
+
+async def log_activity(student_id, action, detail=""):
+    await db.student_activity.insert_one({"id": new_id(), "student_id": student_id,
+        "action": action, "detail": detail, "created_at": now_iso()})
+
+async def fee_summary(s):
+    course = await db.courses.find_one({"id": s.get("course_id")}, {"_id": 0}) if s.get("course_id") else {}
+    total = float((course or {}).get("discounted_fee") or (course or {}).get("fee") or s.get("total_fee") or 0)
+    paid = float(s.get("paid_amount") or 0)
+    remaining = max(total - paid, 0)
+    status = "PAID" if total > 0 and remaining <= 0 else ("PARTIAL" if paid > 0 else "UNPAID")
+    return {"total_fee": total, "paid": paid, "remaining": remaining, "payment_status": status}
+
+def entitlement_active(e):
+    if not e or e.get("status") != "GRANTED":
+        return False
+    today = now_iso()[:10]
+    if e.get("start_date") and e["start_date"] > today:
+        return False
+    if e.get("expiry_date") and e["expiry_date"] < today:
+        return False
+    return True
+
+class StudentLoginIn(BaseModel):
+    identifier: str
+    password: str
+
+@api.post("/student/login")
+async def student_login(body: StudentLoginIn):
+    ident = body.identifier.strip()
+    s = await db.students.find_one({"$or": [{"email": ident.lower()}, {"student_id": ident}, {"student_id": ident.upper()}]})
+    if not s or not s.get("password_hash") or not verify_password(body.password, s["password_hash"]):
+        raise HTTPException(401, "Invalid credentials. Contact the institute if you haven't set a password.")
+    token = create_student_token(s["id"], s.get("email"))
+    await log_activity(s["id"], "Login", "Student logged in")
+    return {"token": token, "student": {"id": s["id"], "student_id": s.get("student_id"),
+            "name": s.get("full_name"), "email": s.get("email")}}
+
+@api.get("/student/me")
+async def student_me(s=Depends(get_current_student)):
+    return {"id": s["id"], "student_id": s.get("student_id"), "name": s.get("full_name"), "email": s.get("email"), "photo_url": s.get("photo_url")}
+
+@api.get("/student/profile")
+async def student_get_profile(s=Depends(get_current_student)):
+    return await db.students.find_one({"id": s["id"]}, {"_id": 0, "password_hash": 0})
+
+@api.put("/student/profile")
+async def student_update_profile(body: Dict[str, Any], s=Depends(get_current_student)):
+    patch = {k: v for k, v in body.items() if k in STUDENT_EDITABLE}
+    patch["updated_at"] = now_iso()
+    await db.students.update_one({"id": s["id"]}, {"$set": patch})
+    await log_activity(s["id"], "Profile Updated")
+    return await db.students.find_one({"id": s["id"]}, {"_id": 0, "password_hash": 0})
+
+@api.get("/student/dashboard")
+async def student_dashboard(s=Depends(get_current_student)):
+    fee = await fee_summary(s)
+    course = await db.courses.find_one({"id": s.get("course_id")}, {"_id": 0}) if s.get("course_id") else {}
+    batch = await db.batches.find_one({"id": s.get("batch_id")}, {"_id": 0}) if s.get("batch_id") else {}
+    resources = await db.learning_resources.find({"course_id": s.get("course_id"), "active": True}, {"_id": 0}).to_list(1000)
+    ents = {e["resource_id"]: e for e in await db.entitlements.find({"student_id": s["id"]}, {"_id": 0}).to_list(2000)}
+    granted = [r for r in resources if entitlement_active(ents.get(r["id"]))]
+
+    def ct(pred):
+        tot = [r for r in resources if pred(r.get("resource_type"))]
+        g = [r for r in tot if entitlement_active(ents.get(r["id"]))]
+        return {"granted": len(g), "total": len(tot)}
+
+    completed = await db.student_progress.count_documents({"student_id": s["id"], "completed": True})
+    base = len(granted) or 1
+    progress = min(round((completed / base) * 100), 100) if granted else 0
+    quiz_res = [r for r in resources if r.get("resource_type") == "Quiz"]
+    quiz_unlocked = any(entitlement_active(ents.get(r["id"])) for r in quiz_res)
+    cert_count = await db.certificates.count_documents({"student_id": s["id"]})
+    return {
+        "student": {k: s.get(k) for k in ["id", "student_id", "full_name", "email", "mobile", "photo_url", "status"]},
+        "course": {"name": (course or {}).get("name"), "id": (course or {}).get("id"), "duration": (course or {}).get("duration")},
+        "batch": {"label": (f"{(course or {}).get('name', '')} — {(batch or {}).get('start_date', '')}" if batch else ""),
+                  "start_date": (batch or {}).get("start_date"), "end_date": (batch or {}).get("end_date"),
+                  "trainer": s.get("trainer") or (batch or {}).get("trainer")},
+        "fee": fee,
+        "access": {
+            "videos": ct(lambda t: t in ("Video", "Video Overview")),
+            "notes": ct(lambda t: t in ("Notes", "PDF", "Document", "Slide Deck")),
+            "audio": ct(lambda t: t in ("Audio", "Audio Overview")),
+            "quiz": ct(lambda t: t == "Quiz"),
+            "granted_total": len(granted), "resources_total": len(resources),
+        },
+        "progress": progress,
+        "final_quiz": {"unlocked": quiz_unlocked, "exists": len(quiz_res) > 0},
+        "certificates": cert_count,
+    }
+
+@api.get("/student/resources")
+async def student_resources(s=Depends(get_current_student)):
+    resources = await db.learning_resources.find({"course_id": s.get("course_id"), "active": True}, {"_id": 0}).to_list(1000)
+    resources.sort(key=lambda x: (x.get("module", ""), x.get("sort_order", 0), x.get("created_at", "")))
+    ents = {e["resource_id"]: e for e in await db.entitlements.find({"student_id": s["id"]}, {"_id": 0}).to_list(2000)}
+    prog = {p["resource_id"] for p in await db.student_progress.find({"student_id": s["id"], "completed": True}, {"_id": 0}).to_list(2000)}
+    out = []
+    for r in resources:
+        e = ents.get(r["id"])
+        active = entitlement_active(e)
+        reason = None
+        if not active:
+            if e and e.get("status") == "GRANTED" and e.get("expiry_date") and e["expiry_date"] < now_iso()[:10]:
+                reason = "Access expired"
+            elif e and e.get("status") == "REVOKED":
+                reason = "Access not granted"
+            else:
+                reason = "Please complete payment for access"
+        out.append({
+            "id": r["id"], "title": r.get("title"), "resource_type": r.get("resource_type"),
+            "module": r.get("module"), "topic": r.get("topic"), "description": r.get("description"),
+            "download_allowed": bool(r.get("download_allowed")), "completed": r["id"] in prog,
+            "locked": not active, "lock_reason": reason,
+            "access": {"start_date": (e or {}).get("start_date"), "expiry_date": (e or {}).get("expiry_date")},
+        })
+    return out
+
+@api.get("/student/resources/{rid}/access")
+async def student_resource_access(rid: str, s=Depends(get_current_student)):
+    r = await db.learning_resources.find_one({"id": rid}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Resource not found")
+    e = await db.entitlements.find_one({"student_id": s["id"], "resource_id": rid}, {"_id": 0})
+    if not entitlement_active(e):
+        raise HTTPException(403, "You do not have access to this resource.")
+    await log_activity(s["id"], "Resource Opened", r.get("title", ""))
+    return {"id": r["id"], "title": r.get("title"), "resource_type": r.get("resource_type"),
+            "content_url": r.get("content_url") or r.get("external_url") or "",
+            "download_allowed": bool(r.get("download_allowed")), "body": r.get("body", "")}
+
+@api.post("/student/resources/{rid}/complete")
+async def student_resource_complete(rid: str, s=Depends(get_current_student)):
+    e = await db.entitlements.find_one({"student_id": s["id"], "resource_id": rid}, {"_id": 0})
+    if not entitlement_active(e):
+        raise HTTPException(403, "No access")
+    await db.student_progress.update_one({"student_id": s["id"], "resource_id": rid},
+        {"$set": {"completed": True, "updated_at": now_iso()}, "$setOnInsert": {"id": new_id()}}, upsert=True)
+    await log_activity(s["id"], "Resource Completed", rid)
+    return {"ok": True}
+
+@api.post("/student/documents")
+async def student_upload_doc(file: UploadFile = File(...), doc_type: str = Query("Other"), s=Depends(get_current_student)):
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(400, "File too large (max 10MB)")
+    mid = new_id()
+    await db.media_files.insert_one({"id": mid, "content_type": file.content_type or "application/octet-stream",
+        "data": base64.b64encode(data).decode(), "private": True, "owner_student": s["id"], "created_at": now_iso()})
+    doc = {"id": new_id(), "student_id": s["id"], "doc_type": doc_type, "file_id": mid,
+           "filename": file.filename, "created_at": now_iso()}
+    await db.student_documents.insert_one(dict(doc))
+    await log_activity(s["id"], "Document Uploaded", doc_type)
+    doc.pop("_id", None)
+    return doc
+
+@api.get("/student/documents")
+async def student_list_docs(s=Depends(get_current_student)):
+    return await db.student_documents.find({"student_id": s["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+@api.get("/student/documents/{doc_id}/file")
+async def student_doc_file(doc_id: str, s=Depends(get_current_student)):
+    d = await db.student_documents.find_one({"id": doc_id, "student_id": s["id"]}, {"_id": 0})
+    if not d:
+        raise HTTPException(404, "Document not found")
+    m = await db.media_files.find_one({"id": d["file_id"]}, {"_id": 0})
+    if not m:
+        raise HTTPException(404, "File missing")
+    await log_activity(s["id"], "Download", d.get("doc_type", ""))
+    return Response(content=base64.b64decode(m["data"]), media_type=m["content_type"],
+        headers={"Content-Disposition": f'inline; filename="{d.get("filename", "document")}"'})
+
+@api.delete("/student/documents/{doc_id}")
+async def student_delete_doc(doc_id: str, s=Depends(get_current_student)):
+    d = await db.student_documents.find_one({"id": doc_id, "student_id": s["id"]}, {"_id": 0})
+    if not d:
+        raise HTTPException(404, "Document not found")
+    await db.media_files.delete_one({"id": d["file_id"]})
+    await db.student_documents.delete_one({"id": doc_id})
+    return {"ok": True}
+
+@api.get("/student/activity")
+async def student_activity(s=Depends(get_current_student)):
+    return await db.student_activity.find({"student_id": s["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+@api.get("/student/certificates")
+async def student_certificates(s=Depends(get_current_student)):
+    return await db.certificates.find({"student_id": s["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+
+# ---- admin: student password, learning access, entitlements, documents
+@api.post("/admin/students/{sid}/set-password")
+async def admin_set_student_password(sid: str, body: Dict[str, Any], admin=Depends(get_current_admin)):
+    pw = body.get("password")
+    if not pw or len(pw) < 6:
+        raise HTTPException(400, "Password must be at least 6 characters")
+    r = await db.students.update_one({"id": sid}, {"$set": {"password_hash": hash_password(pw), "updated_at": now_iso()}})
+    if r.matched_count == 0:
+        raise HTTPException(404, "Student not found")
+    return {"ok": True}
+
+@api.get("/admin/students/{sid}/learning")
+async def admin_student_learning(sid: str, admin=Depends(get_current_admin)):
+    s = await db.students.find_one({"id": sid}, {"_id": 0, "password_hash": 0})
+    if not s:
+        raise HTTPException(404, "Student not found")
+    resources = await db.learning_resources.find({"course_id": s.get("course_id")}, {"_id": 0}).to_list(1000)
+    resources.sort(key=lambda x: (x.get("module", ""), x.get("sort_order", 0)))
+    ents = {e["resource_id"]: e for e in await db.entitlements.find({"student_id": sid}, {"_id": 0}).to_list(2000)}
+    for r in resources:
+        e = ents.get(r["id"])
+        r["access_status"] = (e or {}).get("status", "NONE")
+        r["start_date"] = (e or {}).get("start_date")
+        r["expiry_date"] = (e or {}).get("expiry_date")
+    return {"student": s, "fee": await fee_summary(s), "resources": resources,
+            "has_password": bool((await db.students.find_one({"id": sid}, {"password_hash": 1})).get("password_hash"))}
+
+@api.get("/admin/students/{sid}/documents")
+async def admin_student_documents(sid: str, admin=Depends(get_current_admin)):
+    return await db.student_documents.find({"student_id": sid}, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+@api.get("/admin/documents/{doc_id}/file")
+async def admin_doc_file(doc_id: str, admin=Depends(get_current_admin)):
+    d = await db.student_documents.find_one({"id": doc_id}, {"_id": 0})
+    if not d:
+        raise HTTPException(404, "Not found")
+    m = await db.media_files.find_one({"id": d["file_id"]}, {"_id": 0})
+    if not m:
+        raise HTTPException(404, "File missing")
+    return Response(content=base64.b64decode(m["data"]), media_type=m["content_type"],
+        headers={"Content-Disposition": f'inline; filename="{d.get("filename", "document")}"'})
+
+@api.get("/admin/students/{sid}/activity")
+async def admin_student_activity(sid: str, admin=Depends(get_current_admin)):
+    return await db.student_activity.find({"student_id": sid}, {"_id": 0}).sort("created_at", -1).to_list(300)
+
+class EntitlementIn(BaseModel):
+    student_ids: List[str]
+    resource_ids: List[str]
+    start_date: Optional[str] = None
+    expiry_date: Optional[str] = None
+
+@api.post("/admin/entitlements/grant")
+async def admin_grant(body: EntitlementIn, admin=Depends(get_current_admin)):
+    n = 0
+    for sid in body.student_ids:
+        for rid in body.resource_ids:
+            await db.entitlements.update_one({"student_id": sid, "resource_id": rid},
+                {"$set": {"student_id": sid, "resource_id": rid, "status": "GRANTED",
+                          "start_date": body.start_date or now_iso()[:10], "expiry_date": body.expiry_date or "",
+                          "granted_by": admin.get("email"), "granted_at": now_iso(), "revoked_at": "", "updated_at": now_iso()},
+                 "$setOnInsert": {"id": new_id()}}, upsert=True)
+            await log_activity(sid, "Access Granted", rid)
+            n += 1
+    return {"ok": True, "count": n}
+
+@api.post("/admin/entitlements/revoke")
+async def admin_revoke(body: EntitlementIn, admin=Depends(get_current_admin)):
+    n = 0
+    for sid in body.student_ids:
+        for rid in body.resource_ids:
+            await db.entitlements.update_one({"student_id": sid, "resource_id": rid},
+                {"$set": {"status": "REVOKED", "revoked_at": now_iso(), "updated_at": now_iso()}})
+            await log_activity(sid, "Access Revoked", rid)
+            n += 1
+    return {"ok": True, "count": n}
+
+@app.on_event("startup")
+async def seed_student_portal():
+    try:
+        await db.entitlements.create_index([("student_id", 1), ("resource_id", 1)], unique=True)
+        await db.students.create_index("student_id")
+        await db.student_activity.create_index("student_id")
+        if await db.students.count_documents({}) == 0:
+            course = await db.courses.find_one({"published": True}, {"_id": 0})
+            if course:
+                batch = await db.batches.find_one({}, {"_id": 0})
+                sid = new_id()
+                await db.students.insert_one({"id": sid, "student_id": "CW-2026-0001",
+                    "full_name": "Deepak Harale", "first_name": "Deepak", "last_name": "Harale",
+                    "email": "student@cloudwavetechnologies.com", "mobile": "9000000000",
+                    "course_id": course["id"], "batch_id": (batch or {}).get("id", ""),
+                    "trainer": (batch or {}).get("trainer", "CloudWave Trainer"),
+                    "status": "Active", "payment_status": "Partial", "paid_amount": 20000,
+                    "total_fee": course.get("discounted_fee") or course.get("fee") or 50000,
+                    "password_hash": hash_password("Student@1234"),
+                    "created_at": now_iso(), "updated_at": now_iso()})
+                if batch:
+                    await make_enrollment(sid, course["id"], batch["id"], now_iso()[:10], "Active")
+                defs = [("Course Introduction", "Video Overview", 1, True), ("Module 1 — Core Concepts", "Video", 1, True),
+                        ("Module 1 Notes", "Notes", 1, True), ("Module 2 — Advanced", "Video", 2, False),
+                        ("Advanced Notes", "PDF", 2, False), ("Final Course Test", "Quiz", 3, False)]
+                for i, (title, rtype, mod, grant) in enumerate(defs):
+                    rid = new_id()
+                    await db.learning_resources.insert_one({"id": rid, "title": title, "resource_type": rtype,
+                        "course_id": course["id"], "batch_id": (batch or {}).get("id", ""), "module": f"Module {mod}",
+                        "content_url": "", "external_url": "", "download_allowed": rtype in ("Notes", "PDF"),
+                        "body": "Sample learning content for " + title + ".", "sort_order": i, "active": True,
+                        "created_at": now_iso(), "updated_at": now_iso()})
+                    if grant:
+                        await db.entitlements.insert_one({"id": new_id(), "student_id": sid, "resource_id": rid,
+                            "status": "GRANTED", "start_date": now_iso()[:10], "expiry_date": "",
+                            "granted_by": "system", "granted_at": now_iso(), "updated_at": now_iso()})
+    except Exception as e:
+        logger.error(f"student portal seed failed: {e}")
 
 
 # ------------------------------------------------------------------ PAYMENTS (provider-agnostic)

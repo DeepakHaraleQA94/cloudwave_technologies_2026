@@ -78,6 +78,9 @@ export default function Navbar() {
               <Phone className="h-4 w-4" /> {settings.phone}
             </a>
           )}
+          <Button variant="outline" onClick={() => nav("/student/login")} data-testid="nav-student-login" className="rounded-full">
+            Student Login
+          </Button>
           <Button onClick={() => nav("/enquiry")} data-testid="nav-enquire-btn" className="rounded-full">
             Enquire Now <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
@@ -95,6 +98,7 @@ export default function Navbar() {
                 {l.label}
               </NavLink>
             ))}
+            <Button onClick={() => { setOpen(false); nav("/student/login"); }} variant="outline" className="mb-2 w-full rounded-full" data-testid="mobile-student-login">Student Login</Button>
             <div className="mt-3 flex gap-2">
               <Button onClick={() => { setOpen(false); nav("/enquiry"); }} className="flex-1 rounded-full">Enquire Now</Button>
               {settings.phone && (

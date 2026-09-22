@@ -35,6 +35,10 @@ import Students from "@/pages/admin/Students";
 import Payments from "@/pages/admin/Payments";
 import ResourceManager from "@/pages/admin/ResourceManager";
 import Technologies from "@/pages/admin/Technologies";
+import LearningAccess from "@/pages/admin/LearningAccess";
+import StudentLogin from "@/pages/student/StudentLogin";
+import StudentDashboard from "@/pages/student/StudentDashboard";
+import { StudentAuthProvider, StudentProtectedRoute } from "@/context/StudentAuthContext";
 import Settings from "@/pages/admin/Settings";
 import ContactMessages from "@/pages/admin/ContactMessages";
 import Users from "@/pages/admin/Users";
@@ -51,6 +55,7 @@ function App() {
       <Splash />
       <BrowserRouter>
         <AuthProvider>
+          <StudentAuthProvider>
           <SiteProvider>
             <ScrollToTop />
             <Suspense fallback={<Loader />}>
@@ -79,6 +84,9 @@ function App() {
 
                 <Route path="/payment/checkout" element={<PaymentCheckout />} />
 
+                <Route path="/student/login" element={<StudentLogin />} />
+                <Route path="/student/dashboard" element={<StudentProtectedRoute><StudentDashboard /></StudentProtectedRoute>} />
+
                 <Route path="/admin/login" element={<Login />} />
                 <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
                   <Route index element={<Dashboard />} />
@@ -89,12 +97,14 @@ function App() {
                   <Route path="settings" element={<Settings />} />
                   <Route path="users" element={<Users />} />
                   <Route path="technologies" element={<Technologies />} />
+                  <Route path="learning-access" element={<LearningAccess />} />
                   <Route path="r/:resource" element={<ResourceManager />} />
                 </Route>
               </Routes>
             </Suspense>
             <Toaster position="top-right" richColors />
           </SiteProvider>
+          </StudentAuthProvider>
         </AuthProvider>
       </BrowserRouter>
     </div>
