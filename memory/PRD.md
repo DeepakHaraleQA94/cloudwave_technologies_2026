@@ -18,6 +18,22 @@ Full-stack, modern, responsive IT training institute website for "CloudWave Tech
 - Admin: JWT login/forgot-password, protected routes, sidebar dashboard, stats + 4 charts, Enquiry management (search/filter/pagination/view/status/notes/follow-up/delete/CSV export), generic CRUD for courses/batches/trainers/testimonials/faqs/blog/gallery/videos/events/placements/themes with image upload + publish toggles, Contact messages, Website Settings (tabbed), Users/Admins.
 - Dynamic theme system: time-based dark mode, festival/seasonal/admission themes with priority + date scheduling, accent color injection, banner (homepage + dashboard greeting).
 
+## Student Portal — Phase 1 core (Jun 2026)
+- Separate Student auth (JWT role='student', token key cw_stoken): POST /api/student/login (Student ID or email + password); students log in regardless of payment status. Admin sets/resets password (Learning Access or POST /api/admin/students/{sid}/set-password). Seeded test student CW-2026-0001 / Student@1234.
+- Student Dashboard (/student/dashboard) tabs: Overview (fee total/paid/remaining + payment status, access counts, progress %, final-test & certificate locked/unlocked), Profile (editable; ID/email locked), Course & Batch, Fees, My Learning, Documents, Certificates, Activity. Responsive.
+- Learning Resources collection + Admin "Learning Studio" (/admin/r/learning_resources via generic CRUD; 15 resource types; content_url/external_url — no large base64 video). Entitlements collection (GRANTED/REVOKED, start/expiry) with unique (student,resource) index.
+- Admin "Learning Access" (/admin/learning-access): search student, per-resource Grant/Revoke, Grant All, start/expiry dates, set login password. Bulk endpoint accepts multiple students (single-student UI).
+- SECURITY (backend-enforced, verified): locked resource content -> 403; no token -> 401; admin token on student endpoint -> 403; private documents -> /api/media 403 + owner-only access; identity always derived from token, never frontend. Locked resources stay VISIBLE but disabled with "Please complete payment for access".
+- Activity logging (login, profile update, resource open/complete, document upload, access granted/revoked). Course progress from completed granted resources.
+- Public header "Student Login" button (desktop + mobile) -> /student/login.
+- Tested: iteration_4.json — backend 17/17 (security matrix), frontend 100% (all tabs + admin grant/revoke reflection).
+
+### Student Portal — DEFERRED (P1, not yet built)
+- Final Quiz engine (questions/options/scoring/passing %/attempts/time limit) — currently a "Quiz" is just a lockable resource type.
+- Automatic Course Completion Certificate generation + PDF (A4 landscape) on quiz pass; Internship Certificate template + admin certificate-type selector with auto-populate + unique CWT-CERT / CWT-INT IDs.
+- Admin dashboard stat cards (paid/partial/unpaid/active access/expired/resources/certs), resource filters, bulk multi-student grant UI.
+- Note: existing /verify certificate page + certificates collection reused; My Certificates reads certificates by student_id.
+
 ## Technologies We Teach (Jun 2026)
 - New dynamic homepage section (added after the "End-to-End Software Development Training" services section; existing sections untouched). Component: components/site/TechShowcase.jsx (public) + admin/Technologies.jsx (manager).
 - Admin (/admin/technologies): Add/Edit/Deactivate/Reorder technologies; SVG icon support (inline `svg_icon` or `icon_url`, with colored-monogram fallback); assign each tech to a Daily Theme (everyday or a weekday); accent color; description.

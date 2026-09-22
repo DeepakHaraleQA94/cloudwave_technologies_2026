@@ -1,0 +1,36 @@
+{
+  "summary": "End-to-end validation of the new Student Portal (student login, dashboard, learning gating, profile, documents, activity) and Admin Learning Access (grant/revoke reflection, Grant All, set-password) plus Learning Studio resource creation. Backend: 17/17 pytest tests passed including full security matrix (401 no token, 403 admin-token-on-student, 403 locked resource, 200 granted, /api/media/{id} returns 403 for private files). Frontend: student login (wrong+correct), all 8 tabs, profile-city save persists, learning shows 3 granted+3 locked matching seed, document upload succeeds and appears in list, activity log captures Login/Profile Updated/Resource Opened/Document Uploaded/Access Granted/Revoked. Admin Learning Access search->select->Grant flips to GRANTED, Revoke flips to REVOKED, all data-testids (la-search-input/btn, la-result-*, la-grant-*, la-revoke-*, la-grant-all, la-password-input, la-set-password) present. Admin Learning Studio create via /api/admin/data/learning_resources persists and appears in student view (locked, as expected). Mark-complete increments dashboard progress. Set-password + login-with-new-password + restore all work.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Learning Access", "issues": ["Access Start / Access Expiry use browser-native mm/dd/yyyy date inputs instead of a shadcn Calendar/Popover — inconsistent with rest of the admin UI and locale-sensitive."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_student_portal.py",
+    "/app/test_reports/pytest/student_portal_results.xml"
+  ],
+  "action_items": [
+    "Optional: replace native date inputs on /admin/learning-access (la-start-date, la-expiry-date) with the shadcn Calendar component to match admin design system.",
+    "server.py is now ~1900 lines — recommend splitting into routers (student, admin_entitlements, payments, technologies) for maintainability. Not a bug; tech debt."
+  ],
+  "critical_code_review_comments": [
+    "Student token check in get_current_student correctly rejects admin-role tokens (403). Good defense-in-depth.",
+    "entitlement_active() correctly handles missing entitlement (None), REVOKED status, expired dates, and future start dates.",
+    "get_media() 403 on private files verified — protected content is not accessible via public route.",
+    "student_upload_doc reads full file into memory (base64 in MongoDB) — acceptable for the 10MB cap but note large-scale users will want GridFS/S3 later.",
+    "/api/admin/students/{sid}/set-password enforces min 6 chars but does not require special chars/uppercase — matches seed policy. Acceptable for MVP.",
+    "Note the ResourceManager UI at /admin/r/learning_resources uses backend /api/admin/data/learning_resources (generic CRUD) — the URL segments differ (r vs data). Not a bug, just something to remember."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_student_portal.py"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% (all Student Portal tabs + Admin Learning Access flows)"},
+  "test_credentials": "Admin: admin@cloudwavetechnologies.com / Admin@1234. Student: CW-2026-0001 / Student@1234.",
+  "seed_data_creation": "Test creates a temporary TEST_-prefixed learning_resource then deletes it. Uploads a test document then deletes it. Grants + revokes the locked seed resources (Module 2 — Advanced, Advanced Notes, Final Course Test) to restore original 3-granted/3-locked state. Sets a temp password then restores Student@1234. Profile city is left as 'TEST_ActivityCity' — harmless.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Regression test file /app/backend/tests/test_student_portal.py is idempotent — safe to re-run. All Student Portal + Admin Learning Access data-testids exist and are stable. Deferred features per main agent note (quiz scoring engine, auto course-certificate PDF, internship certificate template) are NOT covered and should not be tested until implemented."
+}
