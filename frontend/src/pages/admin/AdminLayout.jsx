@@ -25,6 +25,7 @@ const NAV = [
   { to: "/admin/r/placements", label: "Placement Stories", Icon: Award },
   { to: "/admin/r/slides", label: "Homepage Slider", Icon: ImageIcon },
   { to: "/admin/r/certificates", label: "Certificates", Icon: BadgeCheck },
+  { to: "/admin/certificate-issue", label: "Issue Internship Cert", Icon: Award },
   { section: "System" },
   { to: "/admin/payments", label: "Payments", Icon: CreditCard },
   { to: "/admin/r/expenses", label: "Batch Expenses", Icon: CreditCard },

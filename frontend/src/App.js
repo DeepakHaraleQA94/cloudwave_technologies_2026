@@ -36,6 +36,7 @@ import Payments from "@/pages/admin/Payments";
 import ResourceManager from "@/pages/admin/ResourceManager";
 import Technologies from "@/pages/admin/Technologies";
 import LearningAccess from "@/pages/admin/LearningAccess";
+import CertificateIssue from "@/pages/admin/CertificateIssue";
 import StudentLogin from "@/pages/student/StudentLogin";
 import StudentDashboard from "@/pages/student/StudentDashboard";
 import { StudentAuthProvider, StudentProtectedRoute } from "@/context/StudentAuthContext";
@@ -98,6 +99,7 @@ function App() {
                   <Route path="users" element={<Users />} />
                   <Route path="technologies" element={<Technologies />} />
                   <Route path="learning-access" element={<LearningAccess />} />
+                  <Route path="certificate-issue" element={<CertificateIssue />} />
                   <Route path="r/:resource" element={<ResourceManager />} />
                 </Route>
               </Routes>

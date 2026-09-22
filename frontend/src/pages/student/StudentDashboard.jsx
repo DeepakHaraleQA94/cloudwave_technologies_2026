@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { studentApi } from "@/lib/studentApi";
 import { useStudent } from "@/context/StudentAuthContext";
 import { useSite } from "@/context/SiteContext";
@@ -199,6 +200,7 @@ function Profile({ onSaved }) {
 
 function Learning({ onChange }) {
   const [items, setItems] = useState(null);
+  const [quizId, setQuizId] = useState(null);
   const load = () => studentApi.get("/student/resources").then((r) => setItems(r.data));
   useEffect(() => { load(); }, []);
   const open = async (r) => {
@@ -232,7 +234,9 @@ function Learning({ onChange }) {
                 </div>
                 <div className="flex items-center gap-2">
                   {r.completed && <Badge className="bg-green-100 text-green-700"><CheckCircle2 className="mr-1 h-3 w-3" /> Done</Badge>}
-                  {r.locked ? <Badge variant="secondary" data-testid={`resource-locked-${r.id}`}><Lock className="mr-1 h-3 w-3" /> Locked</Badge> : (
+                  {r.locked ? <Badge variant="secondary" data-testid={`resource-locked-${r.id}`}><Lock className="mr-1 h-3 w-3" /> Locked</Badge> : r.resource_type === "Quiz" ? (
+                    <Button size="sm" onClick={() => setQuizId(r.id)} data-testid={`resource-quiz-${r.id}`}>Start Test</Button>
+                  ) : (
                     <>
                       <Button size="sm" variant="outline" onClick={() => open(r)} data-testid={`resource-open-${r.id}`}><ExternalLink className="mr-1 h-3.5 w-3.5" /> Open</Button>
                       {!r.completed && <Button size="sm" variant="ghost" onClick={() => complete(r)} data-testid={`resource-complete-${r.id}`}>Mark done</Button>}
@@ -244,7 +248,59 @@ function Learning({ onChange }) {
           </div>
         </Card>
       ))}
+      <QuizModal rid={quizId} onClose={() => { setQuizId(null); load(); onChange?.(); }} />
     </div>
+  );
+}
+
+function QuizModal({ rid, onClose }) {
+  const [quiz, setQuiz] = useState(null);
+  const [err, setErr] = useState("");
+  const [answers, setAnswers] = useState({});
+  const [result, setResult] = useState(null);
+  useEffect(() => {
+    if (!rid) { setQuiz(null); setErr(""); setAnswers({}); setResult(null); return; }
+    studentApi.get(`/student/quiz/${rid}`).then((r) => setQuiz(r.data)).catch((e) => setErr(formatApiError(e.response?.data?.detail)));
+  }, [rid]);
+  const submit = async () => {
+    try {
+      const arr = (quiz.questions || []).map((_, i) => (answers[i] ?? -1));
+      const { data } = await studentApi.post(`/student/quiz/${rid}/submit`, { answers: arr });
+      setResult(data);
+    } catch (e) { setErr(formatApiError(e.response?.data?.detail)); }
+  };
+  return (
+    <Dialog open={!!rid} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg" data-testid="quiz-modal">
+        <DialogHeader><DialogTitle>Final Course Test</DialogTitle></DialogHeader>
+        {err && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-600" data-testid="quiz-error">{err}</p>}
+        {result ? (
+          <div className="py-4 text-center" data-testid="quiz-result">
+            {result.passed ? <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" /> : <Lock className="mx-auto h-12 w-12 text-red-500" />}
+            <p className="mt-2 font-heading text-xl font-bold">{result.passed ? "Congratulations! Course Completed" : "Not passed yet"}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Score: {result.score}% (pass mark {result.passing_score}%). {result.passed ? "Your certificate is available under My Certificates." : `Attempts left: ${result.attempts_left}`}</p>
+            <Button className="mt-4" onClick={onClose} data-testid="quiz-close">Close</Button>
+          </div>
+        ) : (!quiz && !err) ? <div className="grid place-items-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div> : quiz ? (
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">Pass mark {quiz.passing_score}% · Attempts left {quiz.attempts_left}/{quiz.max_attempts}</p>
+            {(quiz.questions || []).map((q, i) => (
+              <div key={i} data-testid={`quiz-q-${i}`}>
+                <p className="text-sm font-medium">{i + 1}. {q.q}</p>
+                <div className="mt-1 space-y-1">
+                  {(q.options || []).map((op, oi) => (
+                    <label key={oi} className="flex items-center gap-2 text-sm">
+                      <input type="radio" name={`q${i}`} checked={answers[i] === oi} onChange={() => setAnswers((a) => ({ ...a, [i]: oi }))} data-testid={`quiz-q-${i}-opt-${oi}`} /> {op}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <Button className="w-full" onClick={submit} disabled={quiz.attempts_left <= 0} data-testid="quiz-submit">Submit Test</Button>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }
 

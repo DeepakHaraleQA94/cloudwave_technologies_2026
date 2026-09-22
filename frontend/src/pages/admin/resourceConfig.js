@@ -241,6 +241,7 @@ export const RESOURCES = {
       { name: "content_url", label: "Content URL (video/file/stream link)", type: "text", full: true, hint: "Direct/YouTube/MP4 link — do not upload large videos as base64" },
       { name: "external_url", label: "External Resource URL", type: "text", full: true },
       { name: "body", label: "Notes / Text Content", type: "textarea", rows: 5, full: true },
+      { name: "quiz", label: "Quiz JSON (for Quiz type)", type: "json", full: true, rows: 8, default: { questions: [{ q: "Sample question?", options: ["Option A", "Option B"], answer_index: 0 }], passing_score: 60, max_attempts: 3 }, hint: '{"questions":[{"q":"..","options":["A","B"],"answer_index":0}],"passing_score":60,"max_attempts":3}' },
       { name: "thumbnail_url", label: "Thumbnail", type: "image" },
       { name: "sort_order", label: "Display Order", type: "number" },
       { name: "download_allowed", label: "Download Allowed", type: "switch" },
@@ -264,4 +265,4 @@ export const RESOURCES = {
   },
 };
 
-export const JSON_FIELDS = { courses: ["syllabus"] };
+export const JSON_FIELDS = { courses: ["syllabus"], learning_resources: ["quiz"] };

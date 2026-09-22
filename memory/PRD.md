@@ -28,6 +28,12 @@ Full-stack, modern, responsive IT training institute website for "CloudWave Tech
 - Public header "Student Login" button (desktop + mobile) -> /student/login.
 - Tested: iteration_4.json — backend 17/17 (security matrix), frontend 100% (all tabs + admin grant/revoke reflection).
 
+### Student Portal — Phase 2 (Jun 2026) — Quiz + Certificates (DONE, tested)
+- Final Course Quiz engine: quiz stored on a `learning_resource` of type "Quiz" (`quiz` JSON: questions/options/answer_index, passing_score, max_attempts) editable in Learning Studio. Student endpoints: GET /api/student/quiz/{rid} (locked→403; also 403 until ALL granted non-quiz content is marked complete — "required content completion"), POST /api/student/quiz/{rid}/submit (scores, enforces max attempts). Answers never sent to client.
+- Pass → student status "Completed" + auto-generates Course Completion certificate (unique CWT-CERT-YYYY-NNNNNN). Fail → certificate stays locked, retry within attempts. Verified: locked-before-content 403, pass 100%→cert, PDF 200.
+- Internship certificate: admin page /admin/certificate-issue (nav "Issue Internship Cert") — search student, fill role/department/technology/dates/duration → POST /api/admin/certificates/internship (unique CWT-INT-YYYY-NNNNNN). Course completion certs are auto (not manual).
+- Certificate PDF (existing /api/certificates/{cid}/download, reportlab A4 landscape) extended to render BOTH course & internship layouts with student ID, batch, completion date, score, dates, department/domain, authorized person + designation. My Certificates tab lists both types with Download (verified in UI). /verify page reused.
+
 ### Student Portal — DEFERRED (P1, not yet built)
 - Final Quiz engine (questions/options/scoring/passing %/attempts/time limit) — currently a "Quiz" is just a lockable resource type.
 - Automatic Course Completion Certificate generation + PDF (A4 landscape) on quiz pass; Internship Certificate template + admin certificate-type selector with auto-populate + unique CWT-CERT / CWT-INT IDs.

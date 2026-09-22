@@ -524,34 +524,54 @@ async def download_certificate(cid: str):
 
     pdf.setFillColor(dark)
     pdf.setFont("Helvetica-Bold", 34)
-    pdf.drawCentredString(cx, H - 185, "Certificate of Completion")
+    is_intern = c.get("cert_type") == "internship"
+    pdf.drawCentredString(cx, H - 185, "Certificate of Internship" if is_intern else "Certificate of Completion")
     pdf.setStrokeColor(accent); pdf.setLineWidth(2)
-    pdf.line(cx - 90, H - 198, cx + 90, H - 198)
+    pdf.line(cx - 110, H - 198, cx + 110, H - 198)
 
     pdf.setFillColor(muted); pdf.setFont("Helvetica", 14)
     pdf.drawCentredString(cx, H - 235, "This is to certify that")
     pdf.setFillColor(blue); pdf.setFont("Helvetica-Bold", 30)
     pdf.drawCentredString(cx, H - 275, c.get("student_name", ""))
     pdf.setFillColor(muted); pdf.setFont("Helvetica", 14)
-    pdf.drawCentredString(cx, H - 305, "has successfully completed the course")
-    pdf.setFillColor(dark); pdf.setFont("Helvetica-Bold", 20)
-    pdf.drawCentredString(cx, H - 335, c.get("course", ""))
+    if is_intern:
+        pdf.drawCentredString(cx, H - 305, "has successfully completed an internship as")
+        pdf.setFillColor(dark); pdf.setFont("Helvetica-Bold", 20)
+        pdf.drawCentredString(cx, H - 335, c.get("internship_role", ""))
+    else:
+        pdf.drawCentredString(cx, H - 305, "has successfully completed the course")
+        pdf.setFillColor(dark); pdf.setFont("Helvetica-Bold", 20)
+        pdf.drawCentredString(cx, H - 335, c.get("course", ""))
 
     details = []
-    if c.get("grade"): details.append(f"Grade: {c['grade']}")
+    if c.get("student_ref"): details.append(f"Student ID: {c['student_ref']}")
+    if is_intern:
+        if c.get("department"): details.append(f"Dept: {c['department']}")
+        if c.get("technology"): details.append(f"Domain: {c['technology']}")
+        if c.get("start_date") and c.get("end_date"): details.append(f"{c['start_date']} to {c['end_date']}")
+        if c.get("duration"): details.append(f"Duration: {c['duration']}")
+    else:
+        if c.get("batch"): details.append(f"Batch: {c['batch']}")
+        if c.get("grade"): details.append(f"Score: {c['grade']}")
+    if c.get("completion_date"): details.append(f"Completed: {c['completion_date']}")
     if c.get("issue_date"): details.append(f"Issued: {c['issue_date']}")
     if details:
-        pdf.setFillColor(muted); pdf.setFont("Helvetica", 12)
-        pdf.drawCentredString(cx, H - 365, "     |     ".join(details))
+        pdf.setFillColor(muted); pdf.setFont("Helvetica", 11)
+        mid = (len(details) + 1) // 2
+        pdf.drawCentredString(cx, H - 368, "     |     ".join(details[:mid]))
+        if details[mid:]:
+            pdf.drawCentredString(cx, H - 386, "     |     ".join(details[mid:]))
 
     pdf.setFillColor(dark); pdf.setFont("Helvetica-Bold", 11)
     pdf.drawString(70, 70, f"Certificate ID: {c.get('certificate_id')}")
     pdf.setFillColor(muted); pdf.setFont("Helvetica", 9)
     pdf.drawString(70, 55, "Verify authenticity at the institute website /verify page.")
     pdf.setStrokeColor(dark); pdf.setLineWidth(1)
-    pdf.line(W - 230, 78, W - 70, 78)
-    pdf.setFillColor(dark); pdf.setFont("Helvetica", 10)
-    pdf.drawCentredString(W - 150, 62, "Authorised Signatory")
+    pdf.line(W - 250, 82, W - 70, 82)
+    pdf.setFillColor(dark); pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawCentredString(W - 160, 66, c.get("authorized_person") or "Authorised Signatory")
+    pdf.setFillColor(muted); pdf.setFont("Helvetica", 9)
+    pdf.drawCentredString(W - 160, 52, c.get("designation") or "")
 
     pdf.showPage(); pdf.save()
     buf.seek(0)
@@ -1170,6 +1190,114 @@ async def student_activity(s=Depends(get_current_student)):
 @api.get("/student/certificates")
 async def student_certificates(s=Depends(get_current_student)):
     return await db.certificates.find({"student_id": s["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+
+# ---- Final quiz + certificates
+async def next_cert_id(kind):
+    prefix = "CWT-INT" if kind == "internship" else "CWT-CERT"
+    yr = datetime.now().year
+    n = await db.certificates.count_documents({"cert_type": kind}) + 1
+    while await db.certificates.find_one({"certificate_id": f"{prefix}-{yr}-{n:06d}"}):
+        n += 1
+    return f"{prefix}-{yr}-{n:06d}"
+
+async def required_content_done(student_id, course_id):
+    res = await db.learning_resources.find({"course_id": course_id, "active": True, "resource_type": {"$ne": "Quiz"}}, {"_id": 0}).to_list(1000)
+    granted_ids = {e["resource_id"] for e in await db.entitlements.find({"student_id": student_id, "status": "GRANTED"}, {"_id": 0}).to_list(2000)}
+    granted = [r for r in res if r["id"] in granted_ids]
+    if not granted:
+        return False
+    done = {p["resource_id"] for p in await db.student_progress.find({"student_id": student_id, "completed": True}, {"_id": 0}).to_list(2000)}
+    return all(r["id"] in done for r in granted)
+
+@api.get("/student/quiz/{rid}")
+async def student_get_quiz(rid: str, s=Depends(get_current_student)):
+    r = await db.learning_resources.find_one({"id": rid, "resource_type": "Quiz"}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Quiz not found")
+    e = await db.entitlements.find_one({"student_id": s["id"], "resource_id": rid}, {"_id": 0})
+    if not entitlement_active(e):
+        raise HTTPException(403, "This quiz is locked.")
+    if not await required_content_done(s["id"], s.get("course_id")):
+        raise HTTPException(403, "Complete all your granted course content before taking the Final Course Test.")
+    quiz = r.get("quiz") or {}
+    maxa = int(quiz.get("max_attempts") or 3)
+    used = await db.quiz_attempts.count_documents({"student_id": s["id"], "resource_id": rid})
+    return {"id": rid, "title": r.get("title"), "passing_score": int(quiz.get("passing_score") or 60),
+            "time_limit": quiz.get("time_limit"), "attempts_used": used, "max_attempts": maxa,
+            "attempts_left": max(maxa - used, 0),
+            "questions": [{"q": q.get("q"), "options": q.get("options", [])} for q in quiz.get("questions", [])]}
+
+@api.post("/student/quiz/{rid}/submit")
+async def student_submit_quiz(rid: str, body: Dict[str, Any], s=Depends(get_current_student)):
+    r = await db.learning_resources.find_one({"id": rid, "resource_type": "Quiz"}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Quiz not found")
+    e = await db.entitlements.find_one({"student_id": s["id"], "resource_id": rid}, {"_id": 0})
+    if not entitlement_active(e):
+        raise HTTPException(403, "This quiz is locked.")
+    if not await required_content_done(s["id"], s.get("course_id")):
+        raise HTTPException(403, "Complete all your granted course content first.")
+    quiz = r.get("quiz") or {}
+    questions = quiz.get("questions", [])
+    if not questions:
+        raise HTTPException(400, "This quiz has no questions configured.")
+    maxa = int(quiz.get("max_attempts") or 3)
+    used = await db.quiz_attempts.count_documents({"student_id": s["id"], "resource_id": rid})
+    if used >= maxa:
+        raise HTTPException(400, "No attempts remaining.")
+    answers = body.get("answers", [])
+    correct = sum(1 for i, q in enumerate(questions) if i < len(answers) and answers[i] == q.get("answer_index"))
+    total = len(questions)
+    score = round((correct / total) * 100)
+    passing = int(quiz.get("passing_score") or 60)
+    passed = score >= passing
+    await db.quiz_attempts.insert_one({"id": new_id(), "student_id": s["id"], "resource_id": rid,
+        "score": score, "passed": passed, "created_at": now_iso()})
+    await log_activity(s["id"], "Quiz Submitted", f"{r.get('title')} — {score}%")
+    cert_id = None
+    if passed:
+        await db.student_progress.update_one({"student_id": s["id"], "resource_id": rid},
+            {"$set": {"completed": True, "updated_at": now_iso()}, "$setOnInsert": {"id": new_id()}}, upsert=True)
+        await db.students.update_one({"id": s["id"]}, {"$set": {"status": "Completed", "updated_at": now_iso()}})
+        existing = await db.certificates.find_one({"student_id": s["id"], "cert_type": "course"}, {"_id": 0})
+        if existing:
+            cert_id = existing["certificate_id"]
+        else:
+            cinfo = await db.courses.find_one({"id": s.get("course_id")}, {"_id": 0}) or {}
+            binfo = await db.batches.find_one({"id": s.get("batch_id")}, {"_id": 0}) or {}
+            settings = await db.website_settings.find_one({"id": "main"}, {"_id": 0}) or {}
+            cert_id = await next_cert_id("course")
+            await db.certificates.insert_one({"id": new_id(), "certificate_id": cert_id, "cert_type": "course",
+                "student_id": s["id"], "student_name": s.get("full_name"), "student_ref": s.get("student_id"),
+                "course": cinfo.get("name", ""), "batch": (f"{cinfo.get('name', '')} — {binfo.get('start_date', '')}" if binfo else ""),
+                "duration": cinfo.get("duration", ""), "completion_date": now_iso()[:10], "grade": f"{score}%", "score": score,
+                "issue_date": now_iso()[:10], "authorized_person": settings.get("cert_authorized_person", "Director"),
+                "designation": settings.get("cert_designation", "Director"), "published": True, "created_at": now_iso()})
+            await log_activity(s["id"], "Certificate Generated", cert_id)
+    return {"score": score, "passed": passed, "passing_score": passing, "correct": correct, "total": total,
+            "certificate_id": cert_id, "attempts_left": max(maxa - used - 1, 0)}
+
+@api.post("/admin/certificates/internship")
+async def admin_create_internship(body: Dict[str, Any], admin=Depends(get_current_admin)):
+    sid = body.get("student_id_ref") or ""
+    s = await db.students.find_one({"id": sid}, {"_id": 0}) if sid else None
+    settings = await db.website_settings.find_one({"id": "main"}, {"_id": 0}) or {}
+    cert_id = await next_cert_id("internship")
+    doc = {"id": new_id(), "certificate_id": cert_id, "cert_type": "internship", "student_id": sid,
+        "student_name": body.get("student_name") or (s or {}).get("full_name", ""),
+        "student_ref": body.get("student_ref") or (s or {}).get("student_id", ""),
+        "internship_role": body.get("internship_role", ""), "department": body.get("department", ""),
+        "technology": body.get("technology", ""), "start_date": body.get("start_date", ""),
+        "end_date": body.get("end_date", ""), "duration": body.get("duration", ""),
+        "completion_date": body.get("completion_date") or now_iso()[:10], "issue_date": now_iso()[:10],
+        "authorized_person": body.get("authorized_person") or settings.get("cert_authorized_person", "Director"),
+        "designation": body.get("designation") or settings.get("cert_designation", "Director"),
+        "published": True, "created_at": now_iso()}
+    await db.certificates.insert_one(dict(doc))
+    if sid:
+        await log_activity(sid, "Certificate Generated", cert_id)
+    doc.pop("_id", None)
+    return doc
 
 # ---- admin: student password, learning access, entitlements, documents
 @api.post("/admin/students/{sid}/set-password")
